@@ -6,20 +6,18 @@
 
 class GestorCifrado {
 public:
-    GestorCifrado(std::shared_ptr<GestorAuditoria> gestor, const std::string& clave_encriptacion);
+    GestorCifrado(std::shared_ptr<GestorAuditoria> gestor, const std::string& clave_encriptacion_hex);
 
-    void cifrarTabla(const std::string& nombre_tabla, const std::vector<std::string>& nombres_columnas);
-    void descifrarTabla(const std::string& nombre_tabla, const std::vector<std::string>& nombres_columnas);
+    void cifrarTablasDeAuditoria();
 
-    std::vector<std::vector<std::string>> ejecutarConsultaYDescifrar(
-        const std::string& consulta,
-        const std::vector<std::string>& alias_columnas_cifradas
+    std::vector<std::vector<std::string>> ejecutarConsultaConDesencriptado(
+        const std::string& consulta
     );
 
 private:
     std::shared_ptr<GestorAuditoria> gestor_db;
     std::vector<unsigned char> clave;
 
-    std::string encriptar(const std::string& texto_plano);
-    std::string desencriptar(const std::string& texto_cifrado_hex);
+    std::string cifrarValor(const std::string& texto_plano);
+    std::string descifrarValor(const std::string& texto_cifrado_hex);
 };

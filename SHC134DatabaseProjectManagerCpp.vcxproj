@@ -129,8 +129,7 @@
     <ClCompile Include="GestorAuditoria.cpp" />
     <ClCompile Include="GestorBaseDatos.cpp" />
     <ClCompile Include="GestorCifrado.cpp" />
-    <ClCompile Include="GestorEncriptacion.cpp" />
-    <ClCompile Include="GestorSeguridad.cpp" />
+    <ClCompile Include="GestorExportacion.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="Utils.cpp" />
   </ItemGroup>
@@ -139,8 +138,7 @@
     <ClInclude Include="GestorAuditoria.hpp" />
     <ClInclude Include="GestorBaseDatos.hpp" />
     <ClInclude Include="GestorCifrado.hpp" />
-    <ClInclude Include="GestorEncriptacion.hpp" />
-    <ClInclude Include="GestorSeguridad.hpp" />
+    <ClInclude Include="GestorExportacion.hpp" />
     <ClInclude Include="Modelos.hpp" />
     <ClInclude Include="Utils.hpp" />
   </ItemGroup>

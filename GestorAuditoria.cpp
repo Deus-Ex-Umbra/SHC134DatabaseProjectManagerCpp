@@ -19,9 +19,7 @@ void GestorAuditoria::conectar(const std::string& connection_string, const std::
         switch (motor_actual) {
         case MotorDB::PostgreSQL:
             conn_pg = PQconnectdb(connection_string.c_str());
-            if (PQstatus(conn_pg) != CONNECTION_OK) {
-                throw std::runtime_error(PQerrorMessage(conn_pg));
-            }
+            if (PQstatus(conn_pg) != CONNECTION_OK) throw std::runtime_error(PQerrorMessage(conn_pg));
             break;
         case MotorDB::MySQL:
             conn_mysql = std::make_unique<mysqlx::Session>(connection_string);
@@ -51,9 +49,7 @@ bool GestorAuditoria::estaConectado() const {
     switch (motor_actual) {
     case MotorDB::PostgreSQL: return conn_pg && PQstatus(conn_pg) == CONNECTION_OK;
     case MotorDB::MySQL: return mysql_conectado;
-    case MotorDB::SQLServer:
-    case MotorDB::SQLite: return conn_odbc && conn_odbc->connected();
-    default: return false;
+    default: return conn_odbc && conn_odbc->connected();
     }
 }
 
@@ -73,8 +69,7 @@ void GestorAuditoria::ejecutarComando(const std::string& consulta) {
         case MotorDB::MySQL:
             conn_mysql->sql(consulta).execute();
             break;
-        case MotorDB::SQLServer:
-        case MotorDB::SQLite:
+        default:
             nanodbc::just_execute(*conn_odbc, NANODBC_TEXT(consulta));
             break;
         }
@@ -87,7 +82,7 @@ void GestorAuditoria::ejecutarComando(const std::string& consulta) {
     }
 }
 
-std::vector<std::string> GestorAuditoria::obtenerNombresDeTablas() {
+std::vector<std::string> GestorAuditoria::obtenerNombresDeTablas(bool incluir_auditoria) {
     std::vector<std::string> tablas;
     std::string consulta;
 
@@ -117,30 +112,34 @@ std::vector<std::string> GestorAuditoria::obtenerNombresDeTablas() {
             tablas.push_back(row[0].get<std::string>());
         }
     }
-    else if (motor_actual == MotorDB::SQLServer || motor_actual == MotorDB::SQLite) {
+    else {
         nanodbc::result res = nanodbc::execute(*conn_odbc, NANODBC_TEXT(consulta));
         while (res.next()) tablas.push_back(res.get<std::string>(0));
     }
 
-    tablas.erase(std::remove_if(tablas.begin(), tablas.end(), [](const std::string& s) {
-        return s.rfind("aud_", 0) == 0 || s.rfind("Aud", 0) == 0 || s == "sysdiagrams" || s.rfind("sqlite_", 0) == 0;
-        }), tablas.end());
-
+    if (!incluir_auditoria) {
+        tablas.erase(std::remove_if(tablas.begin(), tablas.end(), [](const std::string& s) {
+            return s.rfind("aud_", 0) == 0 || s.rfind("Aud", 0) == 0 || s == "sysdiagrams" || s.rfind("sqlite_", 0) == 0;
+            }), tablas.end());
+    }
     return tablas;
 }
 
-std::vector<std::vector<std::string>> GestorAuditoria::ejecutarConsultaConResultado(const std::string& consulta) {
-    std::vector<std::vector<std::string>> resultados;
+ResultadoConsulta GestorAuditoria::ejecutarConsultaConResultado(const std::string& consulta) {
+    ResultadoConsulta resultado;
     switch (motor_actual) {
     case MotorDB::PostgreSQL: {
         PGresult* res = PQexec(conn_pg, consulta.c_str());
         if (PQresultStatus(res) == PGRES_TUPLES_OK) {
+            for (int j = 0; j < PQnfields(res); ++j) {
+                resultado.columnas.push_back(PQfname(res, j));
+            }
             for (int i = 0; i < PQntuples(res); ++i) {
                 std::vector<std::string> fila;
                 for (int j = 0; j < PQnfields(res); ++j) {
                     fila.push_back(PQgetisnull(res, i, j) ? "NULL" : PQgetvalue(res, i, j));
                 }
-                resultados.push_back(fila);
+                resultado.filas.push_back(fila);
             }
         }
         PQclear(res);
@@ -148,29 +147,34 @@ std::vector<std::vector<std::string>> GestorAuditoria::ejecutarConsultaConResult
     }
     case MotorDB::MySQL: {
         mysqlx::RowResult res = conn_mysql->sql(consulta).execute();
+        for (const auto& col : res.getColumns()) {
+            resultado.columnas.push_back(col.getColumnName());
+        }
         for (mysqlx::Row row : res.fetchAll()) {
             std::vector<std::string> fila;
             for (size_t i = 0; i < row.colCount(); ++i) {
                 fila.push_back(row[i].isNull() ? "NULL" : row[i].get<std::string>());
             }
-            resultados.push_back(fila);
+            resultado.filas.push_back(fila);
         }
         break;
     }
-    case MotorDB::SQLServer:
-    case MotorDB::SQLite: {
+    default: {
         nanodbc::result res = nanodbc::execute(*conn_odbc, NANODBC_TEXT(consulta));
-        for (long i = 0; res.next(); ++i) {
+        for (short i = 0; i < res.columns(); ++i) {
+            resultado.columnas.push_back(res.column_name(i));
+        }
+        while (res.next()) {
             std::vector<std::string> fila;
             for (short j = 0; j < res.columns(); ++j) {
                 fila.push_back(res.is_null(j) ? "NULL" : res.get<std::string>(j, "NULL"));
             }
-            resultados.push_back(fila);
+            resultado.filas.push_back(fila);
         }
         break;
     }
     }
-    return resultados;
+    return resultado;
 }
 
 void GestorAuditoria::crearFuncionesAuditoria() {

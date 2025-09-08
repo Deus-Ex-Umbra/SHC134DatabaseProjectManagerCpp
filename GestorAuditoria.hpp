@@ -9,6 +9,11 @@
 #include <mysqlx/xdevapi.h>
 #include <nanodbc/nanodbc.h>
 
+struct ResultadoConsulta {
+    std::vector<std::string> columnas;
+    std::vector<std::vector<std::string>> filas;
+};
+
 class GestorAuditoria {
 public:
     enum class MotorDB {
@@ -22,9 +27,9 @@ public:
     ~GestorAuditoria();
 
     bool estaConectado() const;
-    std::vector<std::string> obtenerNombresDeTablas();
+    std::vector<std::string> obtenerNombresDeTablas(bool incluir_auditoria);
     void generarAuditoriaParaTabla(const std::string& nombre_tabla);
-    std::vector<std::vector<std::string>> ejecutarConsultaConResultado(const std::string& consulta);
+    ResultadoConsulta ejecutarConsultaConResultado(const std::string& consulta);
     void ejecutarComando(const std::string& consulta);
 
 private:
