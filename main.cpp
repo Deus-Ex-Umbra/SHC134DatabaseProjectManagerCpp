@@ -1,74 +1,150 @@
 #include <iostream>
 #include <string>
-#include <vector>
-#include <memory>
 #include <boost/program_options.hpp>
 #include "Utils.hpp"
+#include "GestorAuditoria.hpp"
+
+namespace po = boost::program_options;
+
+std::string construirCadenaConexion(const po::variables_map& vm, GestorAuditoria::MotorDB motor) {
+    std::string cadena_conexion;
+
+    switch (motor) {
+    case GestorAuditoria::MotorDB::PostgreSQL:
+        cadena_conexion = "host=" + vm["host"].as<std::string>() +
+            " port=" + vm["port"].as<std::string>() +
+            " dbname=" + vm["dbname"].as<std::string>() +
+            " user=" + vm["user"].as<std::string>() +
+            " password=" + vm["password"].as<std::string>();
+        break;
+
+    case GestorAuditoria::MotorDB::MySQL:
+        cadena_conexion = "mysql://" + vm["user"].as<std::string>() + ":" +
+            vm["password"].as<std::string>() + "@" +
+            vm["host"].as<std::string>() + ":" +
+            vm["port"].as<std::string>() + "/" +
+            vm["dbname"].as<std::string>();
+        break;
+
+    case GestorAuditoria::MotorDB::SQLServer:
+        cadena_conexion = "DRIVER={ODBC Driver 17 for SQL Server};SERVER=" +
+            vm["host"].as<std::string>() + "," + vm["port"].as<std::string>() +
+            ";DATABASE=" + vm["dbname"].as<std::string>() +
+            ";UID=" + vm["user"].as<std::string>() +
+            ";PWD=" + vm["password"].as<std::string>();
+        break;
+
+    case GestorAuditoria::MotorDB::SQLite:
+        cadena_conexion = "DRIVER={SQLite3 ODBC Driver};Database=" + vm["dbname"].as<std::string>();
+        break;
+    }
+
+    return cadena_conexion;
+}
+
+GestorAuditoria::MotorDB obtenerMotorDb(const std::string& motor_str) {
+    if (motor_str == "postgres" || motor_str == "postgresql") {
+        return GestorAuditoria::MotorDB::PostgreSQL;
+    }
+    else if (motor_str == "mysql") {
+        return GestorAuditoria::MotorDB::MySQL;
+    }
+    else if (motor_str == "sqlserver" || motor_str == "mssql") {
+        return GestorAuditoria::MotorDB::SQLServer;
+    }
+    else if (motor_str == "sqlite") {
+        return GestorAuditoria::MotorDB::SQLite;
+    }
+    else {
+        throw std::runtime_error("Motor de base de datos no soportado: " + motor_str);
+    }
+}
+
+void mostrarAyuda(const po::options_description& desc) {
+    std::cout << "SHC134 Database Project Manager" << std::endl;
+    std::cout << "Herramienta para scaffolding, auditoria y cifrado de bases de datos" << std::endl;
+    std::cout << std::endl;
+    std::cout << "Uso: programa.exe <accion> [opciones]" << std::endl;
+    std::cout << std::endl;
+    std::cout << "Acciones disponibles:" << std::endl;
+    std::cout << "  scaffolding    Genera proyecto completo de API con Nest.js" << std::endl;
+    std::cout << "  auditoria      Crea tablas de auditoria y triggers" << std::endl;
+    std::cout << "  encriptado     Gestiona cifrado de tablas de auditoria" << std::endl;
+    std::cout << std::endl;
+    std::cout << desc << std::endl;
+    std::cout << std::endl;
+    std::cout << "Ejemplos:" << std::endl;
+    std::cout << "  programa.exe scaffolding --motor postgres --dbname mi_db --jwt-secret \"clave123\"" << std::endl;
+    std::cout << "  programa.exe auditoria --motor mysql --dbname mi_db --user admin --password pass" << std::endl;
+    std::cout << "  programa.exe encriptado --motor postgres --dbname mi_db --key \"64chars\" --encrypt-audit-tables" << std::endl;
+}
 
 int main(int argc, char* argv[]) {
-    namespace po = boost::program_options;
-    po::options_description desc("Uso: SHC134DatabaseProjectManagerCpp <accion> [opciones]\nAcciones: scaffolding, auditoria, encriptado, exportar");
-    desc.add_options()
-        ("help,h", "Ayuda")
-        ("accion", po::value<std::string>(), "Accion a realizar")
-        ("motor", po::value<std::string>()->default_value("postgres"), "Motor DB (postgres, mysql, sqlserver, sqlite)")
-        ("host", po::value<std::string>()->default_value("localhost"), "Host DB")
-        ("port", po::value<std::string>()->default_value("5450"), "Puerto DB")
-        ("dbname", po::value<std::string>()->default_value("nest_db"), "Nombre DB")
-        ("user", po::value<std::string>()->default_value("root"), "Usuario DB")
-        ("password", po::value<std::string>()->default_value("root"), "Contraseña DB")
-        ("out,o", po::value<std::string>(), "Archivo/Directorio de salida")
-        ("jwt-secret", po::value<std::string>(), "[Scaffolding] Clave para JWT")
-        ("tabla", po::value<std::string>(), "[Auditoria] Tabla especifica")
-        ("key,k", po::value<std::string>(), "[Encriptado] Clave HEX de 64 caracteres")
-        ("query,q", po::value<std::string>(), "[Encriptado] Consulta SQL a ejecutar/descifrar")
-        ("encrypt-audit-tables", po::bool_switch(), "[Encriptado] Cifra todas las tablas de auditoria existentes");
-
-    po::positional_options_description p;
-    p.add("accion", 1);
-
-    po::variables_map vm;
     try {
-        po::store(po::command_line_parser(argc, argv).options(desc).positional(p).run(), vm);
-        po::notify(vm);
-    }
-    catch (const po::error& e) {
-        std::cerr << "ERROR: " << e.what() << std::endl << desc << std::endl;
-        return 1;
-    }
+        po::options_description desc("Opciones disponibles");
+        desc.add_options()
+            ("help,h", "Muestra esta ayuda")
+            ("motor", po::value<std::string>()->default_value("postgres"), "Motor de BD (postgres, mysql, sqlserver, sqlite)")
+            ("host", po::value<std::string>()->default_value("localhost"), "Host del servidor")
+            ("port", po::value<std::string>()->default_value("5432"), "Puerto del servidor")
+            ("dbname", po::value<std::string>()->default_value("nest_db"), "Nombre de la base de datos")
+            ("user", po::value<std::string>()->default_value("root"), "Usuario")
+            ("password", po::value<std::string>()->default_value("root"), "Contraseña")
+            ("out,o", po::value<std::string>(), "Directorio de salida (solo scaffolding)")
+            ("jwt-secret", po::value<std::string>(), "Clave secreta JWT (requerido para scaffolding)")
+            ("tabla", po::value<std::string>(), "Tabla específica a auditar")
+            ("key,k", po::value<std::string>(), "Clave de cifrado hexadecimal (64 caracteres)")
+            ("encrypt-audit-tables", "Cifra todas las tablas de auditoria")
+            ("query,q", po::value<std::string>(), "Consulta SQL para ejecutar con descifrado");
 
-    if (vm.count("help") || !vm.count("accion")) {
-        std::cout << desc << std::endl;
+        if (argc < 2) {
+            mostrarAyuda(desc);
+            return 1;
+        }
+
+        std::string accion = argv[1];
+
+        po::variables_map vm;
+        po::store(po::parse_command_line(argc - 1, argv + 1, desc), vm);
+        po::notify(vm);
+
+        if (vm.count("help")) {
+            mostrarAyuda(desc);
+            return 0;
+        }
+
+        std::cout << "SHC134 Database Project Manager v1.0" << std::endl;
+        std::cout << "Accion: " << accion << std::endl;
+        std::cout << "Motor: " << vm["motor"].as<std::string>() << std::endl;
+        std::cout << "Base de datos: " << vm["dbname"].as<std::string>() << std::endl;
+        std::cout << "=========================================" << std::endl;
+
+        GestorAuditoria::MotorDB motor = obtenerMotorDb(vm["motor"].as<std::string>());
+        std::string info_conexion = construirCadenaConexion(vm, motor);
+
+        if (accion == "scaffolding") {
+            std::cout << "Iniciando generacion de scaffolding..." << std::endl;
+            manejarScaffolding(vm, motor, info_conexion);
+        }
+        else if (accion == "auditoria") {
+            std::cout << "Iniciando proceso de auditoria..." << std::endl;
+            manejarAuditoria(vm, motor, info_conexion);
+        }
+        else if (accion == "encriptado") {
+            std::cout << "Iniciando proceso de encriptado..." << std::endl;
+            manejarEncriptado(vm, motor, info_conexion);
+        }
+        else {
+            std::cerr << "Accion no reconocida: " << accion << std::endl;
+            std::cerr << "Acciones validas: scaffolding, auditoria, encriptado" << std::endl;
+            return 1;
+        }
+
+        std::cout << std::endl << "Proceso completado exitosamente." << std::endl;
         return 0;
     }
-
-    try {
-        const std::string accion = vm["accion"].as<std::string>();
-        const std::string motor_str = vm["motor"].as<std::string>();
-        GestorAuditoria::MotorDB motor;
-        if (motor_str == "postgres") motor = GestorAuditoria::MotorDB::PostgreSQL;
-        else if (motor_str == "mysql") motor = GestorAuditoria::MotorDB::MySQL;
-        else if (motor_str == "sqlserver") motor = GestorAuditoria::MotorDB::SQLServer;
-        else if (motor_str == "sqlite") motor = GestorAuditoria::MotorDB::SQLite;
-        else throw std::runtime_error("Motor no soportado: " + motor_str);
-
-        std::stringstream ss_conexion;
-        if (motor == GestorAuditoria::MotorDB::PostgreSQL) ss_conexion << "postgresql://" << vm["user"].as<std::string>() << ":" << vm["password"].as<std::string>() << "@" << vm["host"].as<std::string>() << ":" << vm["port"].as<std::string>() << "/" << vm["dbname"].as<std::string>();
-        else if (motor == GestorAuditoria::MotorDB::MySQL) ss_conexion << "Driver={MySQL ODBC 8.0 Unicode Driver};Server=" << vm["host"].as<std::string>() << ";Database=" << vm["dbname"].as<std::string>() << ";Uid=" << vm["user"].as<std::string>() << ";Pwd=" << vm["password"].as<std::string>() << ";";
-        else if (motor == GestorAuditoria::MotorDB::SQLServer) ss_conexion << "Driver={ODBC Driver 17 for SQL Server};Server=" << vm["host"].as<std::string>() << ";Database=" << vm["dbname"].as<std::string>() << ";UID=" << vm["user"].as<std::string>() << ";PWD=" << vm["password"].as<std::string>() << ";";
-        else if (motor == GestorAuditoria::MotorDB::SQLite) ss_conexion << "Driver=SQLite3;Database=" << vm["dbname"].as<std::string>();
-
-        if (accion == "scaffolding") manejarScaffolding(vm, motor, ss_conexion.str());
-        else if (accion == "auditoria") manejarAuditoria(vm, motor, ss_conexion.str());
-        else if (accion == "encriptado") manejarEncriptado(vm, motor, ss_conexion.str());
-        else if (accion == "exportar") manejarExportar(vm, motor);
-        else throw std::runtime_error("Accion no reconocida: " + accion);
-
-    }
     catch (const std::exception& e) {
-        std::cerr << "Error critico: " << e.what() << std::endl;
+        std::cerr << "Error: " << e.what() << std::endl;
         return 1;
     }
-
-    return 0;
 }

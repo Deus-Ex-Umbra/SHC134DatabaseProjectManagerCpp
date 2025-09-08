@@ -13,4 +13,3 @@ void imprimirRutasApi(const std::vector<Tabla>& tablas, const std::string& dir_s
 void manejarScaffolding(const po::variables_map& vm, GestorAuditoria::MotorDB motor, const std::string& info_conexion);
 void manejarAuditoria(const po::variables_map& vm, GestorAuditoria::MotorDB motor, const std::string& info_conexion);
 void manejarEncriptado(const po::variables_map& vm, GestorAuditoria::MotorDB motor, const std::string& info_conexion);
-void manejarExportar(const po::variables_map& vm, GestorAuditoria::MotorDB motor);

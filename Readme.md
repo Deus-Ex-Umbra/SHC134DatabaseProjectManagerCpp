@@ -4,14 +4,13 @@
 ![Platform](https://img.shields.io/badge/platform-Windows-lightgrey.svg)
 ![Version](https://img.shields.io/badge/version-1.0.0-green.svg)
 
-Una potente herramienta de línea de comandos para automatizar tareas complejas de bases de datos, incluyendo generación de proyectos API, configuración de auditorías, cifrado de datos sensibles y exportación de respaldos.
+Una potente herramienta de línea de comandos para automatizar tareas complejas de bases de datos, incluyendo generación de proyectos API, configuración de auditorías y cifrado de datos sensibles.
 
 ## ✨ Características
 
 - 🏗️ **Scaffolding**: Genera estructura completa de proyecto API con Nest.js
 - 📝 **Auditoría**: Crea tablas y triggers de auditoría automática
 - 🔒 **Encriptado**: Gestiona cifrado de tablas de auditoría
-- 📤 **Exportación**: Realiza respaldos completos de bases de datos
 - 🔌 **Multi-motor**: Soporte para PostgreSQL, MySQL, SQL Server y SQLite
 
 ## 📋 Requisitos Previos
@@ -118,35 +117,6 @@ SHC134DatabaseProjectManagerCpp.exe encriptado --motor postgres --dbname mi_db -
 **Consultar datos descifrados:**
 ```bash
 SHC134DatabaseProjectManagerCpp.exe encriptado --motor postgres --dbname mi_db --user admin --password "pass" --key "TU_CLAVE_HEXADECIMAL_DE_64_CARACTERES_AQUI" --query "SELECT * FROM aud_usuarios LIMIT 10"
-```
-
-## 📤 Exportar
-
-Realiza un respaldo completo de la base de datos (tablas, rutinas y triggers) en un único archivo SQL.
-
-### Opciones Específicas
-
-| Opción | Alias | Descripción | Requerido |
-|--------|-------|-------------|-----------|
-| `--out` | `-o` | Ruta del archivo de respaldo | Sí |
-
-> ⚠️ **Advertencia**: La exportación para SQL Server no está soportada y debe realizarse manualmente desde SQL Server Management Studio.
-
-### Ejemplos
-
-**Exportar PostgreSQL:**
-```bash
-SHC134DatabaseProjectManagerCpp.exe exportar --motor postgres --host localhost --dbname mi_db --user admin --password "pass" --out "C:\Respaldos\mi_db_backup.sql"
-```
-
-**Exportar MySQL:**
-```bash
-SHC134DatabaseProjectManagerCpp.exe exportar --motor mysql --user root --password "pass" --dbname mi_db --out "respaldo_mysql.sql"
-```
-
-**Exportar SQLite:**
-```bash
-SHC134DatabaseProjectManagerCpp.exe exportar --motor sqlite --dbname "mi_base_de_datos.sqlite" --out "respaldo.sql"
 ```
 
 ## 📄 Licencia

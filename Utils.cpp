@@ -7,7 +7,6 @@
 #include "GestorBaseDatos.hpp"
 #include "GeneradorCodigo.hpp"
 #include "GestorCifrado.hpp"
-#include "GestorExportacion.hpp"
 
 void ejecutarComando(const std::string& comando, bool esperar) {
     std::cout << "Ejecutando: " << comando << std::endl;
@@ -41,7 +40,14 @@ void manejarScaffolding(const po::variables_map& vm, GestorAuditoria::MotorDB mo
 
     const std::string dir_salida = vm.count("out") ? vm["out"].as<std::string>() : "api-generada-nest";
     GeneradorCodigo generador(dir_salida);
-    generador.generarProyectoCompleto(esquema);
+    generador.generarProyectoCompleto(esquema, 
+        boost::to_lower_copy(vm["motor"].as<std::string>()), 
+        vm["host"].as<std::string>(), 
+        vm["port"].as<std::string>(), 
+        vm["user"].as<std::string>(), 
+        vm["password"].as<std::string>(), 
+        vm["dbname"].as<std::string>(), 
+		vm["jwt-secret"].as<std::string>());
 
     std::ofstream env_file(dir_salida + "/.env");
     env_file << "JWT_SECRET=" << vm["jwt-secret"].as<std::string>() << "\n";
@@ -105,10 +111,4 @@ void manejarEncriptado(const po::variables_map& vm, GestorAuditoria::MotorDB mot
     else {
         throw std::runtime_error("La accion de encriptado requiere --encrypt-audit-tables o --query.");
     }
-}
-
-void manejarExportar(const po::variables_map& vm, GestorAuditoria::MotorDB motor) {
-    if (!vm.count("out")) throw std::runtime_error("--out es obligatorio.");
-    GestorExportacion gestor(motor, vm["dbname"].as<std::string>(), vm["user"].as<std::string>(), vm["password"].as<std::string>(), vm["host"].as<std::string>(), vm["port"].as<std::string>());
-    gestor.exportarRespaldo(vm["out"].as<std::string>());
 }

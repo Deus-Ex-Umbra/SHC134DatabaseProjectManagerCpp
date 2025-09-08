@@ -2,6 +2,7 @@
 #include <string>
 #include <vector>
 #include <memory>
+#include <functional>
 #include "Modelos.hpp"
 #include "GestorAuditoria.hpp"
 #include <libpq-fe.h>
@@ -23,7 +24,7 @@ private:
 
     std::string aPascalCase(const std::string& entrada);
     std::string aCamelCase(const std::string& entrada);
-    std::string aKebabCase(const std::string& entradaPascalCase);
+    std::string aKebabCase(const std::string& entrada_pascal_case);
     std::string mapearTipoDbATs(const std::string& tipo_db);
     std::vector<std::string> obtenerNombresDeTablas();
     std::vector<Columna> obtenerColumnasParaTabla(const std::string& nombre_tabla);
