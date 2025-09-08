@@ -132,11 +132,11 @@ void GestorCifrado::cifrarTablasDeAuditoria() {
             for (size_t i = 0; i < resultado.columnas.size(); ++i) {
                 if (resultado.columnas[i] != "UsuarioAccion" && resultado.columnas[i] != "FechaAccion" && resultado.columnas[i] != "AccionSql") {
                     if (!first_set) update_sql += ", ";
-                    update_sql += resultado.columnas[i] + " = '" + cifrarValor(fila[i]) + "'";
+                    update_sql += "\"" + resultado.columnas[i] + "\" = '" + cifrarValor(fila[i]) + "'";
                     first_set = false;
                 }
                 if (!first_where) where_clause += " AND ";
-                where_clause += resultado.columnas[i] + " = '" + fila[i] + "'";
+                where_clause += "\"" + resultado.columnas[i] + "\" = '" + fila[i] + "'";
                 first_where = false;
             }
             if (!first_set) gestor_db->ejecutarComando(update_sql + where_clause);
@@ -145,7 +145,7 @@ void GestorCifrado::cifrarTablasDeAuditoria() {
         for (const auto& col : resultado.columnas) {
             if (col != "UsuarioAccion" && col != "FechaAccion" && col != "AccionSql") {
                 std::string cifrado_col = cifrarValor(col);
-                std::string rename_sql = "ALTER TABLE " + tabla + " RENAME COLUMN " + col + " TO \"" + cifrado_col + "\"";
+                std::string rename_sql = "ALTER TABLE " + tabla + " RENAME COLUMN \"" + col + "\" TO \"" + cifrado_col + "\"";
                 gestor_db->ejecutarComando(rename_sql);
             }
         }

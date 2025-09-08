@@ -61,7 +61,7 @@ void manejarAuditoria(const po::variables_map& vm, GestorAuditoria::MotorDB moto
 
     std::vector<std::string> tablas = vm.count("tabla") ?
         std::vector<std::string>{vm["tabla"].as<std::string>()} :
-        gestor_auditoria->obtenerNombresDeTablas();
+        gestor_auditoria->obtenerNombresDeTablas(false);
 
     for (const auto& tabla : tablas) {
         std::cout << "Generando auditoria para: " << tabla << std::endl;

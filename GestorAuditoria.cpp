@@ -220,22 +220,21 @@ void GestorAuditoria::generarAuditoriaSQLite(const std::string& nombre_tabla) {
     nlohmann::json datos;
     datos["tabla"] = nombre_tabla;
 
-    std::string consulta_columnas = "PRAGMA table_info(" + nombre_tabla + ");";
-    auto columnas_info = ejecutarConsultaConResultado(consulta_columnas);
+    auto columnas_info_res = ejecutarConsultaConResultado("PRAGMA table_info(" + nombre_tabla + ");");
 
     std::string definicion_columnas;
-    for (size_t i = 0; i < columnas_info.size(); ++i) {
-        definicion_columnas += columnas_info[i][1] + " " + columnas_info[i][2];
-        if (i < columnas_info.size() - 1) {
+    for (size_t i = 0; i < columnas_info_res.filas.size(); ++i) {
+        definicion_columnas += columnas_info_res.filas[i][1] + " " + columnas_info_res.filas[i][2];
+        if (i < columnas_info_res.filas.size() - 1) {
             definicion_columnas += ", ";
         }
     }
     datos["definicion_columnas"] = definicion_columnas;
 
     std::string lista_columnas_old;
-    for (size_t i = 0; i < columnas_info.size(); ++i) {
-        lista_columnas_old += "OLD." + columnas_info[i][1];
-        if (i < columnas_info.size() - 1) {
+    for (size_t i = 0; i < columnas_info_res.filas.size(); ++i) {
+        lista_columnas_old += "OLD." + columnas_info_res.filas[i][1];
+        if (i < columnas_info_res.filas.size() - 1) {
             lista_columnas_old += ", ";
         }
     }
