@@ -1,6 +1,7 @@
 #include "GestorAuditoria.hpp"
 #include <algorithm>
 #include <iostream>
+#include "GestorCifrado.hpp"
 
 GestorAuditoria::GestorAuditoria(MotorDB motor, const std::string& connection_string, const std::string& db)
     : motor_actual(motor), db_name(db) {
@@ -12,6 +13,10 @@ GestorAuditoria::GestorAuditoria(MotorDB motor, const std::string& connection_st
 
 GestorAuditoria::~GestorAuditoria() {
     desconectar();
+}
+
+void GestorAuditoria::setGestorCifrado(std::shared_ptr<GestorCifrado> gestor) {
+    gestor_cifrado = gestor;
 }
 
 void GestorAuditoria::conectar(const std::string& connection_string, const std::string& db) {
@@ -51,6 +56,10 @@ bool GestorAuditoria::estaConectado() const {
     case MotorDB::MySQL: return mysql_conectado;
     default: return conn_odbc && conn_odbc->connected();
     }
+}
+
+GestorAuditoria::MotorDB GestorAuditoria::getMotor() const {
+    return motor_actual;
 }
 
 void GestorAuditoria::ejecutarComando(const std::string& consulta) {
@@ -217,28 +226,35 @@ void GestorAuditoria::generarAuditoriaMySQL(const std::string& nombre_tabla) {
 }
 
 void GestorAuditoria::generarAuditoriaSQLite(const std::string& nombre_tabla) {
-    nlohmann::json datos;
-    datos["tabla"] = nombre_tabla;
-
     auto columnas_info_res = ejecutarConsultaConResultado("PRAGMA table_info(" + nombre_tabla + ");");
+    if (gestor_cifrado) {
+        std::cout << "Generando auditoria cifrada para SQLite (a nivel de aplicacion)..." << std::endl;
 
-    std::string definicion_columnas;
-    for (size_t i = 0; i < columnas_info_res.filas.size(); ++i) {
-        definicion_columnas += columnas_info_res.filas[i][1] + " " + columnas_info_res.filas[i][2];
-        if (i < columnas_info_res.filas.size() - 1) {
-            definicion_columnas += ", ";
+        auto resultado = ejecutarConsultaConResultado("SELECT * FROM " + nombre_tabla);
+        for (const auto& fila : resultado.filas) {
+            gestor_cifrado->cifrarFilaEInsertar(nombre_tabla, columnas_info_res.columnas, fila, "Snapshot");
         }
-    }
-    datos["definicion_columnas"] = definicion_columnas;
 
-    std::string lista_columnas_old;
-    for (size_t i = 0; i < columnas_info_res.filas.size(); ++i) {
-        lista_columnas_old += "OLD." + columnas_info_res.filas[i][1];
-        if (i < columnas_info_res.filas.size() - 1) {
-            lista_columnas_old += ", ";
+    }
+    else {
+        nlohmann::json datos;
+        datos["tabla"] = nombre_tabla;
+        std::string definicion_columnas;
+        for (size_t i = 0; i < columnas_info_res.filas.size(); ++i) {
+            definicion_columnas += columnas_info_res.filas[i][1] + " " + columnas_info_res.filas[i][2];
+            if (i < columnas_info_res.filas.size() - 1) {
+                definicion_columnas += ", ";
+            }
         }
+        datos["definicion_columnas"] = definicion_columnas;
+        std::string lista_columnas_old;
+        for (size_t i = 0; i < columnas_info_res.filas.size(); ++i) {
+            lista_columnas_old += "OLD." + columnas_info_res.filas[i][1];
+            if (i < columnas_info_res.filas.size() - 1) {
+                lista_columnas_old += ", ";
+            }
+        }
+        datos["lista_columnas_old"] = lista_columnas_old;
+        ejecutarComando(env_plantillas.render_file("SqliteAudit.tpl", datos));
     }
-    datos["lista_columnas_old"] = lista_columnas_old;
-
-    ejecutarComando(env_plantillas.render_file("SqliteAudit.tpl", datos));
 }

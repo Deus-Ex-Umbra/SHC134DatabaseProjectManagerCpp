@@ -59,6 +59,11 @@ void manejarAuditoria(const po::variables_map& vm, GestorAuditoria::MotorDB moto
     auto gestor_auditoria = std::make_shared<GestorAuditoria>(motor, info_conexion, vm["dbname"].as<std::string>());
     if (!gestor_auditoria->estaConectado()) throw std::runtime_error("No se pudo conectar a la base de datos.");
 
+    if (motor == GestorAuditoria::MotorDB::SQLite && vm.count("key")) {
+        auto gestor_cifrado = std::make_shared<GestorCifrado>(gestor_auditoria, vm["key"].as<std::string>());
+        gestor_auditoria->setGestorCifrado(gestor_cifrado);
+    }
+
     std::vector<std::string> tablas = vm.count("tabla") ?
         std::vector<std::string>{vm["tabla"].as<std::string>()} :
         gestor_auditoria->obtenerNombresDeTablas(false);

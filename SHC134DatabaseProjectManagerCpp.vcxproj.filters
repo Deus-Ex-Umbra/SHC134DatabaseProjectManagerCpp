@@ -80,5 +80,8 @@
     <None Include="PostgresAudit.tpl" />
     <None Include="SqliteAudit.tpl" />
     <None Include="SqlServerAudit.Functions.tpl" />
+    <None Include="PostgresAuditCifrado.tpl" />
+    <None Include="SqlServerAuditCifrado.tpl" />
+    <None Include="MySqlAuditCifrado.tpl" />
   </ItemGroup>
 </Project>

@@ -8,11 +8,14 @@
 #include <libpq-fe.h>
 #include <mysqlx/xdevapi.h>
 #include <nanodbc/nanodbc.h>
+#include "GestorCifrado.hpp"
 
 struct ResultadoConsulta {
     std::vector<std::string> columnas;
     std::vector<std::vector<std::string>> filas;
 };
+
+class GestorCifrado;
 
 class GestorAuditoria {
 public:
@@ -31,11 +34,14 @@ public:
     void generarAuditoriaParaTabla(const std::string& nombre_tabla);
     ResultadoConsulta ejecutarConsultaConResultado(const std::string& consulta);
     void ejecutarComando(const std::string& consulta);
+    MotorDB getMotor() const;
+    void setGestorCifrado(std::shared_ptr<GestorCifrado> gestor);
 
 private:
     MotorDB motor_actual;
     std::string db_name;
     inja::Environment env_plantillas;
+    std::shared_ptr<GestorCifrado> gestor_cifrado;
 
     PGconn* conn_pg = nullptr;
     std::unique_ptr<mysqlx::Session> conn_mysql;

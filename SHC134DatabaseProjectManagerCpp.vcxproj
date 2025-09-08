@@ -153,13 +153,16 @@
     <None Include="JwtAuthGuard.tpl" />
     <None Include="JwtStrategy.tpl" />
     <None Include="Module.tpl" />
+    <None Include="MySqlAuditCifrado.tpl" />
     <None Include="MySqlAuditFunctions.tpl" />
     <None Include="MySqlAuditTriggers.tpl" />
     <None Include="PackageJson.tpl" />
     <None Include="PostgresAudit.tpl" />
+    <None Include="PostgresAuditCifrado.tpl" />
     <None Include="Service.tpl" />
     <None Include="SqliteAudit.tpl" />
     <None Include="SqlServerAudit.Functions.tpl" />
+    <None Include="SqlServerAuditCifrado.tpl" />
     <None Include="TypeOrmConfig.tpl" />
     <None Include="UpdateDto.tpl" />
   </ItemGroup>

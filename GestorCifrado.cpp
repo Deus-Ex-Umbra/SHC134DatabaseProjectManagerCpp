@@ -36,6 +36,33 @@ GestorCifrado::GestorCifrado(std::shared_ptr<GestorAuditoria> gestor, const std:
     clave = hexABytes(clave_encriptacion_hex);
 }
 
+void GestorCifrado::cifrarFilaEInsertar(const std::string& tabla, const std::vector<std::string>& columnas, const std::vector<std::string>& fila, const std::string& accion) {
+    std::string tabla_auditoria = "aud_" + tabla;
+    std::string insert_sql = "INSERT INTO " + tabla_auditoria + " (";
+    std::string values_sql = ") VALUES (";
+    bool first = true;
+
+    for (const auto& col : columnas) {
+        if (!first) {
+            insert_sql += ", ";
+            values_sql += ", ";
+        }
+        insert_sql += "\"" + cifrarValor(col) + "\"";
+        first = false;
+    }
+    insert_sql += ", UsuarioAccion, FechaAccion, AccionSql";
+
+    first = true;
+    for (const auto& val : fila) {
+        if (!first) values_sql += ", ";
+        values_sql += "'" + cifrarValor(val) + "'";
+        first = false;
+    }
+    values_sql += ", 'SYSTEM', datetime('now'), '" + accion + "')";
+
+    gestor_db->ejecutarComando(insert_sql + values_sql);
+}
+
 std::string GestorCifrado::cifrarValor(const std::string& texto_plano) {
     if (texto_plano.empty() || texto_plano == "NULL") {
         return texto_plano;
@@ -105,6 +132,50 @@ std::string GestorCifrado::descifrarValor(const std::string& texto_cifrado_hex) 
     }
 }
 
+void GestorCifrado::prepararCifradoSQLServer() {
+    std::cout << "Preparando la base de datos SQL Server para el cifrado..." << std::endl;
+    gestor_db->ejecutarComando("IF NOT EXISTS (SELECT * FROM sys.symmetric_keys WHERE name = 'AuditoriaKey') BEGIN CREATE MASTER KEY ENCRYPTION BY PASSWORD = 'DevPasswordComplexEnough#123'; CREATE CERTIFICATE AuditoriaCert WITH SUBJECT = 'Certificado para Cifrado de Auditoria'; CREATE SYMMETRIC KEY AuditoriaKey WITH ALGORITHM = AES_256 ENCRYPTION BY CERTIFICATE AuditoriaCert; END;");
+}
+
+void GestorCifrado::actualizarTriggersParaCifrado(const std::string& nombre_tabla, const std::vector<std::string>& columnas_originales) {
+    std::cout << "Actualizando triggers para la tabla cifrada: " << nombre_tabla << std::endl;
+
+    nlohmann::json datos;
+    std::string tabla_original = nombre_tabla.substr(nombre_tabla.rfind("aud_") == 0 ? 4 : (nombre_tabla.rfind("Aud") == 0 ? 3 : 0));
+    datos["tabla"] = tabla_original;
+    datos["tabla_auditoria"] = nombre_tabla;
+    datos["clave_hex"] = bytesAHex(clave.data(), clave.size());
+
+    std::vector<nlohmann::json> columnas_json;
+    for (const auto& col_name : columnas_originales) {
+        if (col_name != "UsuarioAccion" && col_name != "FechaAccion" && col_name != "AccionSql") {
+            columnas_json.push_back({
+                {"nombre", col_name},
+                {"nombre_cifrado", cifrarValor(col_name)}
+                });
+        }
+    }
+    datos["columnas"] = columnas_json;
+
+    std::string sql_comando;
+    switch (gestor_db->getMotor()) {
+    case GestorAuditoria::MotorDB::PostgreSQL:
+        sql_comando = env_plantillas.render_file("PostgresAuditCifrado.tpl", datos);
+        break;
+    case GestorAuditoria::MotorDB::MySQL:
+        sql_comando = env_plantillas.render_file("MySqlAuditCifrado.tpl", datos);
+        break;
+    case GestorAuditoria::MotorDB::SQLServer:
+        prepararCifradoSQLServer();
+        sql_comando = env_plantillas.render_file("SqlServerAuditCifrado.tpl", datos);
+        break;
+    default:
+        std::cout << "Advertencia: La actualizacion de triggers para cifrado no esta implementada para este motor de base de datos." << std::endl;
+        return;
+    }
+    gestor_db->ejecutarComando(sql_comando);
+}
+
 void GestorCifrado::cifrarTablasDeAuditoria() {
     std::vector<std::string> todas_las_tablas = gestor_db->obtenerNombresDeTablas(true);
     std::vector<std::string> tablas_auditoria;
@@ -119,43 +190,45 @@ void GestorCifrado::cifrarTablasDeAuditoria() {
     for (const auto& tabla : tablas_auditoria) {
         std::cout << "Cifrando tabla: " << tabla << std::endl;
         auto resultado = gestor_db->ejecutarConsultaConResultado("SELECT * FROM " + tabla);
-        if (resultado.columnas.empty() || resultado.filas.empty()) {
-            std::cout << "La tabla esta vacia, solo se cifraran las columnas." << std::endl;
-        }
 
-        for (const auto& fila : resultado.filas) {
-            std::string update_sql = "UPDATE " + tabla + " SET ";
-            std::string where_clause = " WHERE ";
-            bool first_set = true;
-            bool first_where = true;
+        if (!resultado.filas.empty()) {
+            for (const auto& fila : resultado.filas) {
+                std::string update_sql = "UPDATE " + tabla + " SET ";
+                std::string where_clause = " WHERE ";
+                bool first_set = true;
+                bool first_where = true;
 
-            for (size_t i = 0; i < resultado.columnas.size(); ++i) {
-                if (resultado.columnas[i] != "UsuarioAccion" && resultado.columnas[i] != "FechaAccion" && resultado.columnas[i] != "AccionSql") {
-                    if (!first_set) update_sql += ", ";
-                    update_sql += "\"" + resultado.columnas[i] + "\" = '" + cifrarValor(fila[i]) + "'";
-                    first_set = false;
+                for (size_t i = 0; i < resultado.columnas.size(); ++i) {
+                    if (resultado.columnas[i] != "UsuarioAccion" && resultado.columnas[i] != "FechaAccion" && resultado.columnas[i] != "AccionSql") {
+                        if (!first_set) update_sql += ", ";
+                        update_sql += "\"" + resultado.columnas[i] + "\" = '" + cifrarValor(fila[i]) + "'";
+                        first_set = false;
+                    }
+                    if (!first_where) where_clause += " AND ";
+                    where_clause += "\"" + resultado.columnas[i] + "\" IS NOT DISTINCT FROM '" + fila[i] + "'";
+                    first_where = false;
                 }
-                if (!first_where) where_clause += " AND ";
-                where_clause += "\"" + resultado.columnas[i] + "\" = '" + fila[i] + "'";
-                first_where = false;
+                if (!first_set) gestor_db->ejecutarComando(update_sql + where_clause);
             }
-            if (!first_set) gestor_db->ejecutarComando(update_sql + where_clause);
         }
 
+        std::vector<std::string> columnas_originales;
         for (const auto& col : resultado.columnas) {
+            columnas_originales.push_back(col);
             if (col != "UsuarioAccion" && col != "FechaAccion" && col != "AccionSql") {
                 std::string cifrado_col = cifrarValor(col);
                 std::string rename_sql = "ALTER TABLE " + tabla + " RENAME COLUMN \"" + col + "\" TO \"" + cifrado_col + "\"";
                 gestor_db->ejecutarComando(rename_sql);
             }
         }
+
+        actualizarTriggersParaCifrado(tabla, columnas_originales);
     }
     std::cout << "Cifrado de tablas de auditoria completado." << std::endl;
 }
 
 std::vector<std::vector<std::string>> GestorCifrado::ejecutarConsultaConDesencriptado(const std::string& consulta) {
     auto resultado_cifrado = gestor_db->ejecutarConsultaConResultado(consulta);
-
     std::vector<std::vector<std::string>> resultado_final;
 
     std::vector<std::string> cabeceras_descifradas;
