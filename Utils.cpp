@@ -40,22 +40,14 @@ void manejarScaffolding(const po::variables_map& vm, GestorAuditoria::MotorDB mo
 
     const std::string dir_salida = vm.count("out") ? vm["out"].as<std::string>() : "api-generada-nest";
     GeneradorCodigo generador(dir_salida);
-    generador.generarProyectoCompleto(esquema, 
-        boost::to_lower_copy(vm["motor"].as<std::string>()), 
-        vm["host"].as<std::string>(), 
-        vm["port"].as<std::string>(), 
-        vm["user"].as<std::string>(), 
-        vm["password"].as<std::string>(), 
-        vm["dbname"].as<std::string>(), 
-		vm["jwt-secret"].as<std::string>());
-
-    std::ofstream env_file(dir_salida + "/.env");
-    env_file << "JWT_SECRET=" << vm["jwt-secret"].as<std::string>() << "\n";
-    if (vm.count("key")) {
-        env_file << "ENCRYPTION_KEY=" << vm["key"].as<std::string>() << "\n";
-    }
-    env_file.close();
-
+    generador.generarProyectoCompleto(esquema,
+        boost::to_lower_copy(vm["motor"].as<std::string>()),
+        vm["host"].as<std::string>(),
+        vm["port"].as<std::string>(),
+        vm["user"].as<std::string>(),
+        vm["password"].as<std::string>(),
+        vm["dbname"].as<std::string>(),
+        vm["jwt-secret"].as<std::string>());
     ejecutarComando("cd " + dir_salida + " && npm install");
     imprimirRutasApi(esquema, dir_salida);
     ejecutarComando("cd " + dir_salida + " && npm run start:dev");

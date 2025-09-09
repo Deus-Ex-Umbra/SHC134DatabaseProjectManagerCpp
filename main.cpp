@@ -15,7 +15,7 @@ std::string construirCadenaConexion(const po::variables_map& vm, GestorAuditoria
             " port=" + vm["port"].as<std::string>() +
             " dbname=" + vm["dbname"].as<std::string>() +
             " user=" + vm["user"].as<std::string>() +
-            " password=" + vm["password"].as<std::string>();
+            " password='" + vm["password"].as<std::string>() + "'";
         break;
 
     case GestorAuditoria::MotorDB::MySQL:
@@ -89,7 +89,8 @@ int main(int argc, char* argv[]) {
             ("port", po::value<std::string>()->default_value("5432"), "Puerto del servidor")
             ("dbname", po::value<std::string>()->default_value("nest_db"), "Nombre de la base de datos")
             ("user", po::value<std::string>()->default_value("root"), "Usuario")
-            ("password", po::value<std::string>()->default_value("root"), "Contraseña")
+            // CORRECCIÓN 1: Manejo explícito de contraseñas vacías.
+            ("password", po::value<std::string>()->default_value("")->implicit_value(""), "Contraseña")
             ("out,o", po::value<std::string>(), "Directorio de salida (solo scaffolding)")
             ("jwt-secret", po::value<std::string>(), "Clave secreta JWT (requerido para scaffolding)")
             ("tabla", po::value<std::string>(), "Tabla específica a auditar")

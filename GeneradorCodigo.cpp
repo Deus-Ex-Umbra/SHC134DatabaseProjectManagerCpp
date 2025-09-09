@@ -56,6 +56,8 @@ bootstrap();
     "emitDecoratorMetadata": true,
     "experimentalDecorators": true,
     "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true,
+    "moduleResolution": "node",
     "target": "ES2021",
     "sourceMap": true,
     "outDir": "./dist",
@@ -228,36 +230,37 @@ void GeneradorCodigo::generarProyectoCompleto(const std::vector<Tabla>& tablas, 
     for (const auto& tabla : tablas) {
         generarModuloCrud(tabla);
     }
+    generarArchivoEnv(motor_db, host, puerto, usuario, contrasena, base_datos, jwt_secret);
 }
 
-void GeneradorCodigo::generarArchivoEnv(const std::string & motor_db, const std::string & host, const std::string & puerto, const std::string & usuario, const std::string & contrasena, const std::string & base_datos, const std::string & jwt_secret) {
-        std::cout << "Generando archivo .env con configuraciones de base de datos..." << std::endl;
+void GeneradorCodigo::generarArchivoEnv(const std::string& motor_db, const std::string& host, const std::string& puerto, const std::string& usuario, const std::string& contrasena, const std::string& base_datos, const std::string& jwt_secret) {
+    std::cout << "Generando archivo .env con configuraciones de base de datos..." << std::endl;
 
-        std::string tipo_db;
-        if (motor_db == "postgres") tipo_db = "postgres";
-        else if (motor_db == "mysql") tipo_db = "mysql";
-        else if (motor_db == "sqlserver") tipo_db = "mssql";
-        else if (motor_db == "sqlite") tipo_db = "sqlite";
-        else tipo_db = "postgres";
+    std::string tipo_db;
+    if (motor_db == "postgres") tipo_db = "postgres";
+    else if (motor_db == "mysql") tipo_db = "mysql";
+    else if (motor_db == "sqlserver") tipo_db = "mssql";
+    else if (motor_db == "sqlite") tipo_db = "sqlite";
+    else tipo_db = "postgres";
 
-        std::string contenido_env = "# Configuracion de Base de Datos\n";
-        contenido_env += "DB_TYPE=" + tipo_db + "\n";
-        contenido_env += "DB_HOST=" + host + "\n";
-        contenido_env += "DB_PORT=" + puerto + "\n";
-        contenido_env += "DB_USERNAME=" + usuario + "\n";
-        contenido_env += "DB_PASSWORD=" + contrasena + "\n";
-        contenido_env += "DB_DATABASE=" + base_datos + "\n\n";
-        contenido_env += "# Configuracion JWT\n";
-        contenido_env += "JWT_SECRET=" + jwt_secret + "\n\n";
-        contenido_env += "# Configuracion de Aplicacion\n";
-        contenido_env += "NODE_ENV=development\n";
-        contenido_env += "PORT=3000\n";
+    std::string contenido_env = "# Configuracion de Base de Datos\n";
+    contenido_env += "DB_TYPE=" + tipo_db + "\n";
+    contenido_env += "DB_HOST=" + host + "\n";
+    contenido_env += "DB_PORT=" + puerto + "\n";
+    contenido_env += "DB_USERNAME=" + usuario + "\n";
+    contenido_env += "DB_PASSWORD=\"" + contrasena + "\"\n";
+    contenido_env += "DB_DATABASE=" + base_datos + "\n\n";
+    contenido_env += "# Configuracion JWT\n";
+    contenido_env += "JWT_SECRET=\"" + jwt_secret + "\"\n\n";
+    contenido_env += "# Configuracion de Aplicacion\n";
+    contenido_env += "NODE_ENV=development\n";
+    contenido_env += "PORT=3000\n";
 
-        escribirArchivo(dir_salida + "/.env", contenido_env);
+    escribirArchivo(dir_salida + "/.env", contenido_env);
 
-        std::cout << "Archivo .env generado con:" << std::endl;
-        std::cout << "  Tipo BD: " << tipo_db << std::endl;
-        std::cout << "  Host: " << host << ":" << puerto << std::endl;
-        std::cout << "  Base de datos: " << base_datos << std::endl;
-        std::cout << "  Usuario: " << usuario << std::endl;
-    }
+    std::cout << "Archivo .env generado con:" << std::endl;
+    std::cout << "  Tipo BD: " << tipo_db << std::endl;
+    std::cout << "  Host: " << host << ":" << puerto << std::endl;
+    std::cout << "  Base de datos: " << base_datos << std::endl;
+    std::cout << "  Usuario: " << usuario << std::endl;
+}
