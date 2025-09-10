@@ -6,6 +6,7 @@
 #include <iostream>
 #include <sstream>
 #include <set>
+#include <map>
 
 using json = nlohmann::json;
 namespace fs = std::filesystem;
@@ -41,7 +42,7 @@ import { ValidationPipe } from '@nestjs/common';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
-  app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }));
+  app.useGlobalPipes(new ValidationPipe({ whitelist: false, forbidNonWhitelisted: false }));
   app.enableCors();
   await app.listen(3000);
   console.log(`La aplicacion se esta ejecutando en: ${await app.getUrl()}`);
@@ -50,7 +51,25 @@ bootstrap();
 )";
     std::string contenido_tsconfig_json = R"({
   "compilerOptions": {
-    "module": "commonjs", "declaration": true, "removeComments": true, "emitDecoratorMetadata": true, "experimentalDecorators": true, "allowSyntheticDefaultImports": true, "esModuleInterop": true, "moduleResolution": "node", "target": "ES2021", "sourceMap": true, "outDir": "./dist", "baseUrl": "./", "incremental": true, "skipLibCheck": true, "strictNullChecks": false, "noImplicitAny": false, "strictBindCallApply": false, "forceConsistentCasingInFileNames": false, "noFallthroughCasesInSwitch": false
+    "module": "commonjs",
+    "declaration": true,
+    "removeComments": true,
+    "emitDecoratorMetadata": true,
+    "experimentalDecorators": true,
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true,
+    "moduleResolution": "node",
+    "target": "ES2021",
+    "sourceMap": true,
+    "outDir": "./dist",
+    "baseUrl": "./",
+    "incremental": true,
+    "skipLibCheck": true,
+    "strictNullChecks": false,
+    "noImplicitAny": false,
+    "strictBindCallApply": false,
+    "forceConsistentCasingInFileNames": false,
+    "noFallthroughCasesInSwitch": false
   }
 })";
     escribirArchivo(dir_salida + "/package.json", renderizarPlantilla("PackageJson.tpl", {}));
@@ -117,8 +136,14 @@ void GeneradorCodigo::generarModuloCrud(const Tabla& tabla, const std::vector<Ta
     json dependencias_imports = json::array();
     json dependencias_relaciones = json::array();
     std::set<std::string> clases_importadas;
+    std::set<std::string> columnas_fk_procesadas;
 
     for (const auto& fk : tabla.dependencias_fk) {
+        if (columnas_fk_procesadas.find(fk.columna_local) != columnas_fk_procesadas.end()) {
+            continue;
+        }
+        columnas_fk_procesadas.insert(fk.columna_local);
+
         for (const auto& tabla_ref : todas_las_tablas) {
             if (tabla_ref.nombre == fk.tabla_referenciada) {
                 json fk_data;

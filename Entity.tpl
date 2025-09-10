@@ -9,14 +9,12 @@ import * as bcrypt from 'bcrypt';
 @Entity({ name: '{{ tabla.nombre }}' })
 export class {{ tabla.nombre_clase }} {
 ## for col in tabla.columnas
-{% if not col.es_fk %}
 {% if col.es_pk %}
   @PrimaryGeneratedColumn({ name: '{{ col.nombre }}' })
   {{ col.nombre }}: {{ col.tipo_ts }};
 {% else %}
   @Column({ name: '{{ col.nombre }}', type: '{{ col.tipo_db }}', nullable: {% if col.es_nulo %}true{% else %}false{% endif %} })
   {{ col.nombre }}: {{ col.tipo_ts }};
-{% endif %}
 {% endif %}
 ## endfor
 

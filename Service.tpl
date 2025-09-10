@@ -41,8 +41,8 @@ export class {{ tabla.nombre_clase }}Service {
     }
     return registro;
   }
-{% if tabla.es_tabla_usuario %}
 
+{% if tabla.es_tabla_usuario %}
   async buscarPorIdentificadorUnico(identificador: string): Promise<{{ tabla.nombre_clase }} | undefined> {
     return this.{{ tabla.nombre_variable }}Repositorio.findOneBy({ ['{{ tabla.campo_email }}']: identificador } as any);
   }

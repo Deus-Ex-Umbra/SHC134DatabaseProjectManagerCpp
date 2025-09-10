@@ -26,8 +26,8 @@ export class {{ tabla.nombre_clase }}Controller {
   @Get(':id')
   async obtenerUnoPorId(@Param('id', ParseIntPipe) id: number) {
     const registro = await this.{{ tabla.nombre_variable }}Service.obtenerUnoPorId(id);
-    if(!registro) {
-        throw new NotFoundException(`El registro con id ${id} no fue encontrado.`);
+    if (!registro) {
+      throw new NotFoundException(`El registro con id ${id} no fue encontrado.`);
     }
     return registro;
   }
