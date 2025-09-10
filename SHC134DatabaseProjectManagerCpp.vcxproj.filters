@@ -79,7 +79,7 @@
     <None Include="MySqlAuditTriggers.tpl" />
     <None Include="PostgresAudit.tpl" />
     <None Include="SqliteAudit.tpl" />
-    <None Include="SqlServerAudit.Functions.tpl" />
+    <None Include="SqlServerAuditFunctions.tpl" />
     <None Include="PostgresAuditCifrado.tpl" />
     <None Include="SqlServerAuditCifrado.tpl" />
     <None Include="MySqlAuditCifrado.tpl" />

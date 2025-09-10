@@ -5,29 +5,20 @@ DROP FUNCTION IF EXISTS public.{{ tabla }}_aud_cifrado();
 CREATE OR REPLACE FUNCTION public.{{ tabla }}_aud_cifrado()
 RETURNS TRIGGER AS $$
 BEGIN
-    IF TG_OP = 'UPDATE' THEN
+    IF TG_OP = 'INSERT' THEN
         INSERT INTO public.{{ tabla_auditoria }}(
             {{ lista_columnas_cifradas }},
             "UsuarioAccion", "FechaAccion", "AccionSql"
         ) VALUES (
             {{ lista_valores_cifrados }},
-            SESSION_USER, NOW(), 'Modificado'
+            SESSION_USER, NOW(), 'Insertado'
         );
         RETURN NEW;
-    ELSIF TG_OP = 'DELETE' THEN
-        INSERT INTO public.{{ tabla_auditoria }}(
-            {{ lista_columnas_cifradas }},
-            "UsuarioAccion", "FechaAccion", "AccionSql"
-        ) VALUES (
-            {{ lista_valores_cifrados }},
-            SESSION_USER, NOW(), 'Eliminado'
-        );
-        RETURN OLD;
     END IF;
     RETURN NULL;
 END;
 $$ LANGUAGE plpgsql;
 
 CREATE TRIGGER {{ tabla }}_aud_cifrado_trigger
-AFTER UPDATE OR DELETE ON public.{{ tabla }}
+AFTER INSERT ON public.{{ tabla }}
 FOR EACH ROW EXECUTE PROCEDURE public.{{ tabla }}_aud_cifrado();

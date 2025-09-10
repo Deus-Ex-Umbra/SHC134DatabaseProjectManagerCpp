@@ -46,7 +46,6 @@ std::string aKebabCase(const std::string& entrada_pascal_case) {
     return resultado;
 }
 
-
 void ejecutarComando(const std::string& comando, bool esperar) {
     std::cout << "Ejecutando: " << comando << std::endl;
     int resultado = system(comando.c_str());
@@ -123,10 +122,23 @@ void manejarEncriptado(const po::variables_map& vm, GestorAuditoria::MotorDB mot
     if (vm.count("encrypt-audit-tables")) {
         gestor_cifrado.cifrarTablasDeAuditoria();
     }
-    else if (vm.count("query")) {
-        std::string query = vm["query"].as<std::string>();
-        std::cout << "Ejecutando consulta..." << std::endl;
+    else {
+        throw std::runtime_error("La accion de encriptado requiere --encrypt-audit-tables.");
+    }
+}
 
+void manejarConsultaSql(const po::variables_map& vm, GestorAuditoria::MotorDB motor, const std::string& info_conexion) {
+    if (!vm.count("query")) throw std::runtime_error("--query es obligatorio para ejecutar una consulta SQL.");
+
+    auto gestor_db = std::make_shared<GestorAuditoria>(motor, info_conexion, vm["dbname"].as<std::string>());
+    if (!gestor_db->estaConectado()) throw std::runtime_error("No se pudo conectar a la base de datos.");
+
+    std::string query = vm["query"].as<std::string>();
+    std::cout << "Ejecutando consulta..." << std::endl;
+
+    if (vm.count("key")) {
+        std::cout << "Desencriptando resultados con la clave proporcionada..." << std::endl;
+        GestorCifrado gestor_cifrado(gestor_db, vm["key"].as<std::string>());
         auto resultados = gestor_cifrado.ejecutarConsultaConDesencriptado(query);
 
         for (const auto& fila : resultados) {
@@ -140,6 +152,25 @@ void manejarEncriptado(const po::variables_map& vm, GestorAuditoria::MotorDB mot
         }
     }
     else {
-        throw std::runtime_error("La accion de encriptado requiere --encrypt-audit-tables o --query.");
+        auto resultado = gestor_db->ejecutarConsultaConResultado(query);
+
+        bool first = true;
+        for (const auto& col : resultado.columnas) {
+            if (!first) std::cout << "\t|\t";
+            std::cout << col;
+            first = false;
+        }
+        std::cout << std::endl;
+        std::cout << std::string(80, '-') << std::endl;
+
+        for (const auto& fila : resultado.filas) {
+            bool first = true;
+            for (const auto& celda : fila) {
+                if (!first) std::cout << "\t|\t";
+                std::cout << celda;
+                first = false;
+            }
+            std::cout << std::endl;
+        }
     }
 }
