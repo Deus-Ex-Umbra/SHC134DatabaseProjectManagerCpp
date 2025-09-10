@@ -8,6 +8,45 @@
 #include "GeneradorCodigo.hpp"
 #include "GestorCifrado.hpp"
 
+std::string aPascalCase(const std::string& entrada) {
+    std::string resultado;
+    bool capitalizar_siguiente = true;
+    for (char c : entrada) {
+        if (c == '_' || c == '-') {
+            capitalizar_siguiente = true;
+        }
+        else if (capitalizar_siguiente) {
+            resultado += std::toupper(c);
+            capitalizar_siguiente = false;
+        }
+        else {
+            resultado += c;
+        }
+    }
+    return resultado;
+}
+
+std::string aCamelCase(const std::string& entrada) {
+    std::string pascal = aPascalCase(entrada);
+    if (!pascal.empty()) {
+        pascal[0] = std::tolower(pascal[0]);
+    }
+    return pascal;
+}
+
+std::string aKebabCase(const std::string& entrada_pascal_case) {
+    std::string resultado;
+    for (size_t i = 0; i < entrada_pascal_case.length(); ++i) {
+        char c = entrada_pascal_case[i];
+        if (i > 0 && std::isupper(c)) {
+            resultado += '-';
+        }
+        resultado += std::tolower(c);
+    }
+    return resultado;
+}
+
+
 void ejecutarComando(const std::string& comando, bool esperar) {
     std::cout << "Ejecutando: " << comando << std::endl;
     int resultado = system(comando.c_str());

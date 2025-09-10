@@ -22,9 +22,6 @@ private:
     PGconn* conn_pg = nullptr;
     std::unique_ptr<nanodbc::connection> conn_odbc;
 
-    std::string aPascalCase(const std::string& entrada);
-    std::string aCamelCase(const std::string& entrada);
-    std::string aKebabCase(const std::string& entrada_pascal_case);
     std::string mapearTipoDbATs(const std::string& tipo_db);
     std::vector<std::string> obtenerNombresDeTablas();
     std::vector<Columna> obtenerColumnasParaTabla(const std::string& nombre_tabla);

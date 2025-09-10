@@ -1,4 +1,5 @@
 #include "GestorBaseDatos.hpp"
+#include "Utils.hpp" 
 #include <iostream>
 #include <algorithm>
 #include <cctype>
@@ -42,45 +43,6 @@ bool GestorBaseDatos::estaConectado() {
     default:
         return conn_odbc && conn_odbc->connected();
     }
-}
-
-std::string GestorBaseDatos::aPascalCase(const std::string& entrada) {
-    std::string resultado;
-    bool capitalizar_siguiente = true;
-
-    for (char c : entrada) {
-        if (c == '_' || c == '-') {
-            capitalizar_siguiente = true;
-        }
-        else if (capitalizar_siguiente) {
-            resultado += std::toupper(c);
-            capitalizar_siguiente = false;
-        }
-        else {
-            resultado += std::tolower(c);
-        }
-    }
-    return resultado;
-}
-
-std::string GestorBaseDatos::aCamelCase(const std::string& entrada) {
-    std::string pascal = aPascalCase(entrada);
-    if (!pascal.empty()) {
-        pascal[0] = std::tolower(pascal[0]);
-    }
-    return pascal;
-}
-
-std::string GestorBaseDatos::aKebabCase(const std::string& entrada_pascal_case) {
-    std::string resultado;
-    for (size_t i = 0; i < entrada_pascal_case.length(); ++i) {
-        char c = entrada_pascal_case[i];
-        if (i > 0 && std::isupper(c)) {
-            resultado += '-';
-        }
-        resultado += std::tolower(c);
-    }
-    return resultado;
 }
 
 std::string GestorBaseDatos::mapearTipoDbATs(const std::string& tipo_db) {
@@ -159,16 +121,22 @@ std::vector<std::string> GestorBaseDatos::obtenerNombresDeTablas() {
 std::vector<Columna> GestorBaseDatos::obtenerColumnasParaTabla(const std::string& nombre_tabla) {
     std::vector<Columna> columnas;
     std::string consulta;
+    std::string pk_col_name;
 
     switch (motor_actual) {
-    case GestorAuditoria::MotorDB::PostgreSQL:
-        consulta = "SELECT column_name, data_type, is_nullable, column_default FROM information_schema.columns WHERE table_name = '" + nombre_tabla + "' ORDER BY ordinal_position;";
+    case GestorAuditoria::MotorDB::PostgreSQL: {
+        std::string pk_query = "SELECT kcu.column_name FROM information_schema.table_constraints tc JOIN information_schema.key_column_usage kcu ON tc.constraint_name = kcu.constraint_name WHERE tc.constraint_type = 'PRIMARY KEY' AND tc.table_name = '" + nombre_tabla + "';";
+        PGresult* pk_res = PQexec(conn_pg, pk_query.c_str());
+        if (PQntuples(pk_res) > 0) pk_col_name = PQgetvalue(pk_res, 0, 0);
+        PQclear(pk_res);
+        consulta = "SELECT column_name, data_type, is_nullable FROM information_schema.columns WHERE table_name = '" + nombre_tabla + "' ORDER BY ordinal_position;";
         break;
+    }
     case GestorAuditoria::MotorDB::MySQL:
-        consulta = "SELECT column_name, data_type, is_nullable, column_default FROM information_schema.columns WHERE table_name = '" + nombre_tabla + "' AND table_schema = DATABASE() ORDER BY ordinal_position;";
+        consulta = "SELECT column_name, data_type, is_nullable, column_key FROM information_schema.columns WHERE table_name = '" + nombre_tabla + "' AND table_schema = DATABASE() ORDER BY ordinal_position;";
         break;
     case GestorAuditoria::MotorDB::SQLServer:
-        consulta = "SELECT c.name, t.name, CASE WHEN c.is_nullable = 1 THEN 'YES' ELSE 'NO' END, c.default_object_id FROM sys.columns c INNER JOIN sys.types t ON c.user_type_id = t.user_type_id WHERE c.object_id = OBJECT_ID('" + nombre_tabla + "') ORDER BY c.column_id;";
+        consulta = "SELECT c.name, t.name, c.is_nullable, ISNULL(i.is_primary_key, 0) FROM sys.columns c INNER JOIN sys.types t ON c.user_type_id = t.user_type_id LEFT JOIN sys.index_columns ic ON ic.object_id = c.object_id AND ic.column_id = c.column_id LEFT JOIN sys.indexes i ON i.object_id = ic.object_id AND i.index_id = ic.index_id AND i.is_primary_key = 1 WHERE c.object_id = OBJECT_ID('" + nombre_tabla + "') ORDER BY c.column_id;";
         break;
     case GestorAuditoria::MotorDB::SQLite:
         consulta = "PRAGMA table_info(" + nombre_tabla + ");";
@@ -181,15 +149,10 @@ std::vector<Columna> GestorBaseDatos::obtenerColumnasParaTabla(const std::string
             for (int i = 0; i < PQntuples(res); ++i) {
                 Columna col;
                 col.nombre = PQgetvalue(res, i, 0);
-                col.nombre_camel_case = aCamelCase(col.nombre);
                 col.tipo_db = PQgetvalue(res, i, 1);
                 col.tipo_ts = mapearTipoDbATs(col.tipo_db);
                 col.es_nulo = std::string(PQgetvalue(res, i, 2)) == "YES";
-
-                std::string default_value = PQgetisnull(res, i, 3) ? "" : PQgetvalue(res, i, 3);
-                col.es_pk = default_value.find("nextval") != std::string::npos ||
-                    boost::to_lower_copy(col.nombre).find("id") != std::string::npos;
-
+                col.es_pk = col.nombre == pk_col_name;
                 columnas.push_back(col);
             }
         }
@@ -200,12 +163,10 @@ std::vector<Columna> GestorBaseDatos::obtenerColumnasParaTabla(const std::string
         while (res.next()) {
             Columna col;
             col.nombre = res.get<std::string>(1);
-            col.nombre_camel_case = aCamelCase(col.nombre);
             col.tipo_db = res.get<std::string>(2);
             col.tipo_ts = mapearTipoDbATs(col.tipo_db);
             col.es_nulo = res.get<int>(3) == 0;
             col.es_pk = res.get<int>(5) == 1;
-
             columnas.push_back(col);
         }
     }
@@ -214,43 +175,53 @@ std::vector<Columna> GestorBaseDatos::obtenerColumnasParaTabla(const std::string
         while (res.next()) {
             Columna col;
             col.nombre = res.get<std::string>(0);
-            col.nombre_camel_case = aCamelCase(col.nombre);
             col.tipo_db = res.get<std::string>(1);
             col.tipo_ts = mapearTipoDbATs(col.tipo_db);
             col.es_nulo = res.get<std::string>(2) == "YES";
-            col.es_pk = boost::to_lower_copy(col.nombre).find("id") != std::string::npos;
-
+            if (motor_actual == GestorAuditoria::MotorDB::MySQL) {
+                col.es_pk = res.get<std::string>(3) == "PRI";
+            }
+            else {
+                col.es_pk = res.get<int>(3) == 1;
+            }
             columnas.push_back(col);
         }
     }
-
     return columnas;
 }
 
 void GestorBaseDatos::obtenerDependenciasFk(std::vector<Tabla>& tablas) {
     for (auto& tabla : tablas) {
         std::string consulta;
-
         switch (motor_actual) {
         case GestorAuditoria::MotorDB::PostgreSQL:
-            consulta = "SELECT DISTINCT kcu.column_name, ccu.table_name FROM information_schema.table_constraints tc JOIN information_schema.key_column_usage kcu ON tc.constraint_name = kcu.constraint_name JOIN information_schema.constraint_column_usage ccu ON ccu.constraint_name = tc.constraint_name WHERE tc.constraint_type = 'FOREIGN KEY' AND tc.table_name = '" + tabla.nombre + "';";
+            consulta = "SELECT kcu.column_name, ccu.table_name FROM information_schema.table_constraints tc JOIN information_schema.key_column_usage kcu ON tc.constraint_name = kcu.constraint_name JOIN information_schema.constraint_column_usage ccu ON ccu.constraint_name = tc.constraint_name WHERE tc.constraint_type = 'FOREIGN KEY' AND tc.table_name = '" + tabla.nombre + "';";
             break;
         case GestorAuditoria::MotorDB::MySQL:
-            consulta = "SELECT DISTINCT kcu.column_name, kcu.referenced_table_name FROM information_schema.key_column_usage kcu WHERE kcu.table_name = '" + tabla.nombre + "' AND kcu.referenced_table_name IS NOT NULL;";
+            consulta = "SELECT kcu.column_name, kcu.referenced_table_name FROM information_schema.key_column_usage kcu WHERE kcu.table_name = '" + tabla.nombre + "' AND kcu.table_schema = DATABASE() AND kcu.referenced_table_name IS NOT NULL;";
             break;
         case GestorAuditoria::MotorDB::SQLServer:
-            consulta = "SELECT DISTINCT col.name, ref_tab.name FROM sys.foreign_key_columns fk INNER JOIN sys.columns col ON fk.parent_object_id = col.object_id AND fk.parent_column_id = col.column_id INNER JOIN sys.tables tab ON fk.parent_object_id = tab.object_id INNER JOIN sys.tables ref_tab ON fk.referenced_object_id = ref_tab.object_id WHERE tab.name = '" + tabla.nombre + "';";
+            consulta = "SELECT col.name, ref_tab.name FROM sys.foreign_key_columns fk INNER JOIN sys.columns col ON fk.parent_object_id = col.object_id AND fk.parent_column_id = col.column_id INNER JOIN sys.tables tab ON fk.parent_object_id = tab.object_id INNER JOIN sys.tables ref_tab ON fk.referenced_object_id = ref_tab.object_id WHERE tab.name = '" + tabla.nombre + "';";
             break;
         default:
             continue;
         }
 
+        auto procesar_fk = [&](const std::string& col_local, const std::string& tabla_ref) {
+            tabla.dependencias_fk.push_back({ col_local, tabla_ref });
+            for (auto& col : tabla.columnas) {
+                if (col.nombre == col_local) {
+                    col.es_fk = true;
+                    break;
+                }
+            }
+            };
+
         if (motor_actual == GestorAuditoria::MotorDB::PostgreSQL) {
             PGresult* res = PQexec(conn_pg, consulta.c_str());
             if (PQresultStatus(res) == PGRES_TUPLES_OK) {
                 for (int i = 0; i < PQntuples(res); ++i) {
-                    std::string tabla_referenciada = PQgetvalue(res, i, 1);
-                    tabla.dependencias_fk.push_back(tabla_referenciada);
+                    procesar_fk(PQgetvalue(res, i, 0), PQgetvalue(res, i, 1));
                 }
             }
             PQclear(res);
@@ -258,8 +229,7 @@ void GestorBaseDatos::obtenerDependenciasFk(std::vector<Tabla>& tablas) {
         else {
             nanodbc::result res = nanodbc::execute(*conn_odbc, NANODBC_TEXT(consulta));
             while (res.next()) {
-                std::string tabla_referenciada = res.get<std::string>(1);
-                tabla.dependencias_fk.push_back(tabla_referenciada);
+                procesar_fk(res.get<std::string>(0), res.get<std::string>(1));
             }
         }
     }
@@ -267,35 +237,18 @@ void GestorBaseDatos::obtenerDependenciasFk(std::vector<Tabla>& tablas) {
 
 void GestorBaseDatos::analizarDependenciasParaJwt(std::vector<Tabla>& tablas) {
     Tabla* tabla_usuario = nullptr;
-
     for (auto& tabla : tablas) {
         std::string nombre_lower = boost::to_lower_copy(tabla.nombre);
-        if (nombre_lower.find("user") != std::string::npos ||
-            nombre_lower.find("usuario") != std::string::npos ||
-            nombre_lower.find("account") != std::string::npos ||
-            nombre_lower.find("cuenta") != std::string::npos) {
-
+        if (nombre_lower.find("user") != std::string::npos || nombre_lower.find("usuario") != std::string::npos) {
             for (const auto& col : tabla.columnas) {
                 std::string col_lower = boost::to_lower_copy(col.nombre);
-                if (tabla.campo_email_encontrado.empty() &&
-                    (col_lower.find("email") != std::string::npos ||
-                        col_lower.find("correo") != std::string::npos ||
-                        col_lower.find("mail") != std::string::npos ||
-                        col_lower.find("login") != std::string::npos ||
-                        col_lower.find("username") != std::string::npos)) {
-                    tabla.campo_email_encontrado = col.nombre_camel_case;
+                if (tabla.campo_email_encontrado.empty() && (col_lower.find("email") != std::string::npos || col_lower.find("correo") != std::string::npos || col_lower.find("username") != std::string::npos)) {
+                    tabla.campo_email_encontrado = col.nombre;
                 }
-
-                if (tabla.campo_contrasena_encontrado.empty() &&
-                    (col_lower.find("password") != std::string::npos ||
-                        col_lower.find("contrasena") != std::string::npos ||
-                        col_lower.find("contraseña") != std::string::npos ||
-                        col_lower.find("clave") != std::string::npos ||
-                        col_lower.find("pass") != std::string::npos)) {
-                    tabla.campo_contrasena_encontrado = col.nombre_camel_case;
+                if (tabla.campo_contrasena_encontrado.empty() && (col_lower.find("password") != std::string::npos || col_lower.find("contrasena") != std::string::npos)) {
+                    tabla.campo_contrasena_encontrado = col.nombre;
                 }
             }
-
             if (!tabla.campo_email_encontrado.empty() && !tabla.campo_contrasena_encontrado.empty()) {
                 tabla.es_tabla_usuario = true;
                 tabla_usuario = &tabla;
@@ -305,34 +258,30 @@ void GestorBaseDatos::analizarDependenciasParaJwt(std::vector<Tabla>& tablas) {
     }
 
     if (tabla_usuario) {
-        std::vector<std::string> tablas_desprotegidas;
-        tablas_desprotegidas.push_back(tabla_usuario->nombre);
-
-        std::function<void(const std::string&)> agregar_dependencias = [&](const std::string& nombre_tabla) {
-            for (const auto& tabla : tablas) {
-                if (tabla.nombre == nombre_tabla) {
-                    for (const auto& dep : tabla.dependencias_fk) {
-                        if (std::find(tablas_desprotegidas.begin(), tablas_desprotegidas.end(), dep) == tablas_desprotegidas.end()) {
-                            tablas_desprotegidas.push_back(dep);
-                            agregar_dependencias(dep);
+        std::vector<std::string> tablas_desprotegidas = { tabla_usuario->nombre };
+        std::function<void(const std::string&)> agregar_dependencias =
+            [&](const std::string& nombre_tabla) {
+            for (const auto& t : tablas) {
+                if (t.nombre == nombre_tabla) {
+                    for (const auto& dep : t.dependencias_fk) {
+                        if (std::find(tablas_desprotegidas.begin(), tablas_desprotegidas.end(), dep.tabla_referenciada) == tablas_desprotegidas.end()) {
+                            tablas_desprotegidas.push_back(dep.tabla_referenciada);
+                            agregar_dependencias(dep.tabla_referenciada);
                         }
                     }
-                    break;
                 }
             }
             };
-
         agregar_dependencias(tabla_usuario->nombre);
 
         for (auto& tabla : tablas) {
-            if (std::find(tablas_desprotegidas.begin(), tablas_desprotegidas.end(), tabla.nombre) != tablas_desprotegidas.end()) {
+            if (std::find(tablas_desprotegidas.begin(), tablas_desprotegidas.end(), tabla.nombre) == tablas_desprotegidas.end()) {
+                tabla.es_protegida = true;
+            }
+            else {
                 tabla.es_protegida = false;
             }
         }
-
-        std::cout << "Tabla de usuario detectada: " << tabla_usuario->nombre << std::endl;
-        std::cout << "Campo email: " << tabla_usuario->campo_email_encontrado << std::endl;
-        std::cout << "Campo contraseña: " << tabla_usuario->campo_contrasena_encontrado << std::endl;
     }
 }
 
@@ -340,43 +289,23 @@ std::vector<Tabla> GestorBaseDatos::obtenerEsquemaTablas() {
     std::vector<Tabla> tablas;
     std::vector<std::string> nombres_tablas = obtenerNombresDeTablas();
 
-    std::cout << "=== OBTENIENDO ESQUEMA DE TABLAS ===" << std::endl;
-    std::cout << "Tablas encontradas: " << nombres_tablas.size() << std::endl;
-
     for (const auto& nombre_tabla : nombres_tablas) {
-        std::cout << "Procesando tabla: " << nombre_tabla << std::endl;
-
         Tabla tabla;
         tabla.nombre = nombre_tabla;
         tabla.nombre_clase = aPascalCase(nombre_tabla);
         tabla.nombre_variable = aCamelCase(nombre_tabla);
         tabla.nombre_archivo = aKebabCase(tabla.nombre_clase);
         tabla.columnas = obtenerColumnasParaTabla(nombre_tabla);
-
-        std::cout << "  Columnas encontradas: " << tabla.columnas.size() << std::endl;
-        for (const auto& col : tabla.columnas) {
-            std::cout << "    " << col.nombre << " (" << col.tipo_db << " -> " << col.tipo_ts << ")"
-                << (col.es_pk ? " [PK]" : "") << (col.es_nulo ? " [NULL]" : "") << std::endl;
-        }
-
-        // Buscar clave primaria
         for (const auto& col : tabla.columnas) {
             if (col.es_pk) {
                 tabla.clave_primaria = col;
-                std::cout << "  Clave primaria: " << col.nombre << std::endl;
                 break;
             }
         }
-
         tablas.push_back(tabla);
     }
 
-    std::cout << "Obteniendo dependencias FK..." << std::endl;
     obtenerDependenciasFk(tablas);
-
-    std::cout << "Analizando dependencias para JWT..." << std::endl;
     analizarDependenciasParaJwt(tablas);
-
-    std::cout << "Esquema completado." << std::endl;
     return tablas;
 }

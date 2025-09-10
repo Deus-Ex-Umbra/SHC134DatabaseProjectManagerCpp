@@ -9,6 +9,14 @@ struct Columna {
     std::string tipo_ts;
     bool es_nulo;
     bool es_pk = false;
+    bool es_fk = false;
+};
+
+struct DependenciaFK {
+    std::string columna_local;
+    std::string tabla_referenciada;
+    std::string clase_tabla_referenciada;
+    std::string variable_tabla_referenciada;
 };
 
 struct Tabla {
@@ -18,7 +26,7 @@ struct Tabla {
     std::string nombre_archivo;
     Columna clave_primaria;
     std::vector<Columna> columnas;
-    std::vector<std::string> dependencias_fk;
+    std::vector<DependenciaFK> dependencias_fk;
     bool es_tabla_usuario = false;
     bool es_protegida = true;
     std::string campo_email_encontrado;

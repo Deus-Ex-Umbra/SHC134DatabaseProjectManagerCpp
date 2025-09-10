@@ -18,8 +18,8 @@ export class {{ tabla.nombre_clase }}Service {
 {% if tabla.es_tabla_usuario %}
   async crear(crearDto: Crear{{ tabla.nombre_clase }}Dto): Promise<{{ tabla.nombre_clase }}> {
     const salt = await bcrypt.genSalt();
-    const contrasenaHasheada = await bcrypt.hash((crearDto as any)[ '{{ tabla.campo_contrasena }}' ], salt);
-    const dtoConHash = { ...crearDto, [ '{{ tabla.campo_contrasena }}' ]: contrasenaHasheada };
+    const contrasenaHasheada = await bcrypt.hash((crearDto as any)['{{ tabla.campo_contrasena }}'], salt);
+    const dtoConHash = { ...crearDto, ['{{ tabla.campo_contrasena }}']: contrasenaHasheada };
     const nuevoUsuario = this.{{ tabla.nombre_variable }}Repositorio.create(dtoConHash);
     return this.{{ tabla.nombre_variable }}Repositorio.save(nuevoUsuario);
   }
@@ -35,7 +35,7 @@ export class {{ tabla.nombre_clase }}Service {
   }
 
   async obtenerUnoPorId(id: number) {
-    const registro = await this.{{ tabla.nombre_variable }}Repositorio.findOneBy({ [ '{{ tabla.clave_primaria.nombre_camel_case }}' ]: id } as any);
+    const registro = await this.{{ tabla.nombre_variable }}Repositorio.findOneBy({ ['{{ tabla.clave_primaria.nombre }}']: id } as any);
     if (!registro) {
       throw new NotFoundException(`Registro con id ${id} no encontrado.`);
     }
@@ -44,7 +44,7 @@ export class {{ tabla.nombre_clase }}Service {
 {% if tabla.es_tabla_usuario %}
 
   async buscarPorIdentificadorUnico(identificador: string): Promise<{{ tabla.nombre_clase }} | undefined> {
-    return this.{{ tabla.nombre_variable }}Repositorio.findOneBy({ [ '{{ tabla.campo_email }}' ]: identificador } as any);
+    return this.{{ tabla.nombre_variable }}Repositorio.findOneBy({ ['{{ tabla.campo_email }}']: identificador } as any);
   }
 {% endif %}
 
@@ -57,7 +57,7 @@ export class {{ tabla.nombre_clase }}Service {
   async eliminar(id: number) {
     const resultado = await this.{{ tabla.nombre_variable }}Repositorio.delete(id);
     if (resultado.affected === 0) {
-        throw new NotFoundException(`Registro con id ${id} no encontrado.`);
+      throw new NotFoundException(`Registro con id ${id} no encontrado.`);
     }
     return { mensaje: `Registro con id ${id} eliminado correctamente.` };
   }

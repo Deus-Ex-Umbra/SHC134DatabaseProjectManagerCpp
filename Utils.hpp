@@ -7,6 +7,10 @@
 
 namespace po = boost::program_options;
 
+std::string aPascalCase(const std::string& entrada);
+std::string aCamelCase(const std::string& entrada);
+std::string aKebabCase(const std::string& entrada_pascal_case);
+
 void ejecutarComando(const std::string& comando, bool esperar = true);
 void imprimirRutasApi(const std::vector<Tabla>& tablas, const std::string& dir_salida);
 
