@@ -1,4 +1,6 @@
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
+DROP TRIGGER IF EXISTS {{ tabla }}_aud_trigger ON public.{{ tabla }};
+DROP FUNCTION IF EXISTS public.{{ tabla }}_aud();
 DROP TRIGGER IF EXISTS {{ tabla }}_aud_cifrado_trigger ON public.{{ tabla }};
 DROP FUNCTION IF EXISTS public.{{ tabla }}_aud_cifrado();
 
@@ -10,15 +12,33 @@ BEGIN
             {{ lista_columnas_cifradas }},
             "UsuarioAccion", "FechaAccion", "AccionSql"
         ) VALUES (
-            {{ lista_valores_cifrados }},
+            {{ lista_valores_cifrados_new }},
             SESSION_USER, NOW(), 'Insertado'
         );
         RETURN NEW;
+    ELSIF TG_OP = 'UPDATE' THEN
+        INSERT INTO public.{{ tabla_auditoria }}(
+            {{ lista_columnas_cifradas }},
+            "UsuarioAccion", "FechaAccion", "AccionSql"
+        ) VALUES (
+            {{ lista_valores_cifrados_old }},
+            SESSION_USER, NOW(), 'Modificado'
+        );
+        RETURN NEW;
+    ELSIF TG_OP = 'DELETE' THEN
+        INSERT INTO public.{{ tabla_auditoria }}(
+            {{ lista_columnas_cifradas }},
+            "UsuarioAccion", "FechaAccion", "AccionSql"
+        ) VALUES (
+            {{ lista_valores_cifrados_old }},
+            SESSION_USER, NOW(), 'Eliminado'
+        );
+        RETURN OLD;
     END IF;
     RETURN NULL;
 END;
 $$ LANGUAGE plpgsql;
 
 CREATE TRIGGER {{ tabla }}_aud_cifrado_trigger
-AFTER INSERT ON public.{{ tabla }}
+AFTER INSERT OR UPDATE OR DELETE ON public.{{ tabla }}
 FOR EACH ROW EXECUTE PROCEDURE public.{{ tabla }}_aud_cifrado();

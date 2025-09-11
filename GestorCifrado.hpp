@@ -2,6 +2,7 @@
 #include <string>
 #include <vector>
 #include <memory>
+#include <map>
 #include "GestorAuditoria.hpp"
 #include <inja/inja.hpp>
 
@@ -26,6 +27,6 @@ private:
     std::string cifrarValor(const std::string& texto_plano);
     std::string descifrarValor(const std::string& texto_cifrado_hex);
     void prepararCifradoSQLServer();
-    void actualizarTriggersParaCifrado(const std::string& nombre_tabla, const std::vector<std::string>& columnas_originales);
+    void actualizarTriggersParaCifrado(const std::string& nombre_tabla, const std::map<std::string, std::string>& mapa_columnas);
     bool esColumnaCifrada(const std::string& nombre_columna);
 };

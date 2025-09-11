@@ -304,8 +304,18 @@ void GestorAuditoria::generarAuditoriaParaTabla(const std::string& nombre_tabla)
 }
 
 void GestorAuditoria::generarAuditoriaPostgreSQL(const std::string& nombre_tabla) {
+    auto columnas_info_res = ejecutarConsultaConResultado("SELECT column_name FROM information_schema.columns WHERE table_name = '" + nombre_tabla + "' AND table_schema = 'public' ORDER BY ordinal_position;");
+
+    std::string definicion_columnas;
+    for (size_t i = 0; i < columnas_info_res.filas.size(); ++i) {
+        definicion_columnas += "\"" + columnas_info_res.filas[i][0] + "\" TEXT";
+        if (i < columnas_info_res.filas.size() - 1) {
+            definicion_columnas += ", ";
+        }
+    }
     nlohmann::json datos;
     datos["tabla"] = nombre_tabla;
+    datos["definicion_columnas"] = definicion_columnas;
     ejecutarComando(env_plantillas.render_file("PostgresAudit.tpl", datos));
 }
 
@@ -363,7 +373,7 @@ void GestorAuditoria::generarAuditoriaSQLite(const std::string& nombre_tabla) {
         datos["tabla"] = nombre_tabla;
         std::string definicion_columnas;
         for (size_t i = 0; i < columnas_info_res.filas.size(); ++i) {
-            definicion_columnas += columnas_info_res.filas[i][1] + " " + columnas_info_res.filas[i][2];
+            definicion_columnas += "\"" + columnas_info_res.filas[i][1] + "\" TEXT";
             if (i < columnas_info_res.filas.size() - 1) {
                 definicion_columnas += ", ";
             }
