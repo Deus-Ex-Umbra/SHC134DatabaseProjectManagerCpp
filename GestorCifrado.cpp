@@ -217,47 +217,75 @@ void GestorCifrado::cifrarTablasDeAuditoria() {
         tablas_auditoria.end()
     );
 
+    if (gestor_db->getMotor() == GestorAuditoria::MotorDB::SQLServer) {
+        prepararCifradoSQLServer();
+    }
+
     for (const auto& tabla : tablas_auditoria) {
         try {
-            auto resultado_columnas = gestor_db->ejecutarConsultaConResultado("SELECT * FROM " + tabla + " LIMIT 0");
+            auto resultado_columnas = gestor_db->ejecutarConsultaConResultado("SELECT * FROM " + tabla + " LIMIT 1");
             std::map<std::string, std::string> mapa_columnas;
 
             for (const auto& col : resultado_columnas.columnas) {
                 mapa_columnas[col] = cifrarNombreColumnaCesar(col, desplazamiento_cesar);
-                std::string alter_sql = "ALTER TABLE " + tabla + " ALTER COLUMN \"" + col + "\" TYPE TEXT";
+                std::string alter_sql;
+                switch (gestor_db->getMotor()) {
+                case GestorAuditoria::MotorDB::PostgreSQL:
+                    alter_sql = "ALTER TABLE public.\"" + tabla + "\" ALTER COLUMN \"" + col + "\" TYPE TEXT";
+                    break;
+                case GestorAuditoria::MotorDB::MySQL:
+                    alter_sql = "ALTER TABLE `" + tabla + "` MODIFY COLUMN `" + col + "` TEXT";
+                    break;
+                case GestorAuditoria::MotorDB::SQLServer:
+                    alter_sql = "ALTER TABLE dbo.[" + tabla + "] ALTER COLUMN [" + col + "] NVARCHAR(MAX)";
+                    break;
+                default: continue;
+                }
                 gestor_db->ejecutarComando(alter_sql);
             }
 
             if (mapa_columnas.empty()) continue;
 
-            gestor_db->ejecutarComando("ALTER TABLE " + tabla + " ADD COLUMN __temp_id SERIAL");
-
             auto datos_actuales = gestor_db->ejecutarConsultaConResultado("SELECT * FROM " + tabla);
+            if (datos_actuales.filas.empty()) continue;
+
+            const std::string pk_col_name = datos_actuales.columnas.front();
+            int pk_col_idx = 0;
+
+
             for (const auto& fila : datos_actuales.filas) {
-                std::string update_sql = "UPDATE " + tabla + " SET ";
-                std::string where_clause;
+                std::string update_sql = "UPDATE `" + tabla + "` SET ";
+                std::string where_clause = " WHERE `" + pk_col_name + "` = '" + fila[pk_col_idx] + "'";
                 bool first = true;
                 for (size_t i = 0; i < datos_actuales.columnas.size(); ++i) {
                     const auto& col_name = datos_actuales.columnas[i];
-                    if (col_name == "__temp_id") {
-                        where_clause = " WHERE __temp_id = " + fila[i];
-                        continue;
-                    }
+                    if (i == pk_col_idx) continue;
+
                     if (!first) update_sql += ", ";
                     std::string valor_cifrado = cifrarValor(fila[i]);
                     boost::replace_all(valor_cifrado, "'", "''");
-                    update_sql += "\"" + col_name + "\" = '" + valor_cifrado + "'";
+                    update_sql += "`" + col_name + "` = '" + valor_cifrado + "'";
                     first = false;
                 }
-                if (!where_clause.empty()) {
+                if (!first) {
                     gestor_db->ejecutarComando(update_sql + where_clause);
                 }
             }
 
-            gestor_db->ejecutarComando("ALTER TABLE " + tabla + " DROP COLUMN __temp_id");
-
             for (const auto& par : mapa_columnas) {
-                std::string rename_sql = "ALTER TABLE " + tabla + " RENAME COLUMN \"" + par.first + "\" TO \"" + par.second + "\"";
+                std::string rename_sql;
+                switch (gestor_db->getMotor()) {
+                case GestorAuditoria::MotorDB::PostgreSQL:
+                    rename_sql = "ALTER TABLE public.\"" + tabla + "\" RENAME COLUMN \"" + par.first + "\" TO \"" + par.second + "\"";
+                    break;
+                case GestorAuditoria::MotorDB::MySQL:
+                    rename_sql = "ALTER TABLE `" + tabla + "` RENAME COLUMN `" + par.first + "` TO `" + par.second + "`";
+                    break;
+                case GestorAuditoria::MotorDB::SQLServer:
+                    rename_sql = "EXEC sp_rename '" + tabla + "." + par.first + "', '" + par.second + "', 'COLUMN'";
+                    break;
+                default: continue;
+                }
                 gestor_db->ejecutarComando(rename_sql);
             }
             actualizarTriggersParaCifrado(tabla, mapa_columnas);
@@ -290,14 +318,34 @@ std::vector<std::vector<std::string>> GestorCifrado::ejecutarConsultaConDesencri
     return resultado_final;
 }
 
+void GestorCifrado::prepararCifradoSQLServer() {
+    try {
+        gestor_db->ejecutarComando("CREATE MASTER KEY ENCRYPTION BY PASSWORD = 'DevPasswordComplexEnough#123!'");
+    }
+    catch (const std::exception& e) {
+        // La clave maestra ya existe, ignorar el error
+    }
+
+    std::string preparacion_sql =
+        "IF NOT EXISTS (SELECT 1 FROM sys.certificates WHERE name = 'AuditoriaCert')\n"
+        "BEGIN\n"
+        "    CREATE CERTIFICATE AuditoriaCert WITH SUBJECT = 'Auditoria Certificate';\n"
+        "END\n"
+        "GO\n"
+        "IF NOT EXISTS (SELECT 1 FROM sys.symmetric_keys WHERE name = 'AuditoriaKey')\n"
+        "BEGIN\n"
+        "    CREATE SYMMETRIC KEY AuditoriaKey WITH ALGORITHM = AES_256 ENCRYPTION BY CERTIFICATE AuditoriaCert;\n"
+        "END\n"
+        "GO";
+
+    gestor_db->ejecutarComando(preparacion_sql);
+}
+
 void GestorCifrado::actualizarTriggersParaCifrado(const std::string& nombre_tabla_auditoria, const std::map<std::string, std::string>& mapa_columnas) {
     std::string nombre_tabla_original = nombre_tabla_auditoria;
-    if (boost::starts_with(nombre_tabla_original, "aud_")) {
-        nombre_tabla_original = nombre_tabla_original.substr(4);
-    }
-    else if (boost::starts_with(nombre_tabla_original, "Aud")) {
-        nombre_tabla_original = nombre_tabla_original.substr(3);
-    }
+    boost::replace_first(nombre_tabla_original, "aud_", "");
+    boost::replace_first(nombre_tabla_original, "Aud", "");
+
 
     nlohmann::json datos;
     datos["tabla"] = nombre_tabla_original;
@@ -307,7 +355,7 @@ void GestorCifrado::actualizarTriggersParaCifrado(const std::string& nombre_tabl
     std::ostringstream columnas_cifradas_lista, valores_insert_new, valores_update_old, valores_delete_old;
     bool first = true;
 
-    auto resultado_columnas_original = gestor_db->ejecutarConsultaConResultado("SELECT * FROM " + nombre_tabla_original + " LIMIT 0");
+    auto resultado_columnas_original = gestor_db->ejecutarConsultaConResultado("SELECT * FROM " + nombre_tabla_original + " LIMIT 1");
     std::vector<std::string> nombres_columnas_original = resultado_columnas_original.columnas;
 
     for (const auto& col_name : nombres_columnas_original) {
@@ -317,24 +365,88 @@ void GestorCifrado::actualizarTriggersParaCifrado(const std::string& nombre_tabl
             valores_update_old << ", ";
             valores_delete_old << ", ";
         }
-        columnas_cifradas_lista << "\"" << cifrarNombreColumnaCesar(col_name, desplazamiento_cesar) << "\"";
-        valores_insert_new << "encrypt_val(NEW.\"" << col_name << "\"::TEXT)";
-        valores_update_old << "encrypt_val(OLD.\"" << col_name << "\"::TEXT)";
-        valores_delete_old << "encrypt_val(OLD.\"" << col_name << "\"::TEXT)";
+
+        std::string cast_str, quote_open, quote_close, record_prefix_new, record_prefix_old;
+        switch (gestor_db->getMotor()) {
+        case GestorAuditoria::MotorDB::PostgreSQL:
+            cast_str = "::TEXT"; quote_open = "\""; quote_close = "\""; record_prefix_new = "NEW."; record_prefix_old = "OLD."; break;
+        case GestorAuditoria::MotorDB::MySQL:
+            cast_str = ""; quote_open = "`"; quote_close = "`"; record_prefix_new = "NEW."; record_prefix_old = "OLD."; break;
+        case GestorAuditoria::MotorDB::SQLServer:
+            cast_str = ")"; quote_open = "["; quote_close = "]"; record_prefix_new = "i."; record_prefix_old = "d."; break;
+        default: break;
+        }
+
+        columnas_cifradas_lista << quote_open << cifrarNombreColumnaCesar(col_name, desplazamiento_cesar) << quote_close;
+
+        if (gestor_db->getMotor() == GestorAuditoria::MotorDB::SQLServer) {
+            valores_insert_new << "EncryptByKey(Key_GUID('AuditoriaKey'), CAST(" << record_prefix_new << quote_open << col_name << quote_close << " AS NVARCHAR(MAX))" << cast_str;
+            valores_update_old << "EncryptByKey(Key_GUID('AuditoriaKey'), CAST(" << record_prefix_old << quote_open << col_name << quote_close << " AS NVARCHAR(MAX))" << cast_str;
+            valores_delete_old << "EncryptByKey(Key_GUID('AuditoriaKey'), CAST(" << record_prefix_old << quote_open << col_name << quote_close << " AS NVARCHAR(MAX))" << cast_str;
+        }
+        else {
+            valores_insert_new << "encrypt_val(" << record_prefix_new << quote_open << col_name << quote_close << ")";
+            valores_update_old << "encrypt_val(" << record_prefix_old << quote_open << col_name << quote_close << ")";
+            valores_delete_old << "encrypt_val(" << record_prefix_old << quote_open << col_name << quote_close << ")";
+        }
+
         first = false;
     }
 
-    columnas_cifradas_lista << ", \"" << cifrarNombreColumnaCesar("UsuarioAccion", desplazamiento_cesar) << "\", \"" << cifrarNombreColumnaCesar("FechaAccion", desplazamiento_cesar) << "\", \"" << cifrarNombreColumnaCesar("AccionSql", desplazamiento_cesar) << "\"";
-    valores_insert_new << ", encrypt_val(SESSION_USER), encrypt_val(NOW()::TEXT), encrypt_val('Insertado')";
-    valores_update_old << ", encrypt_val(SESSION_USER), encrypt_val(NOW()::TEXT), encrypt_val('Modificado')";
-    valores_delete_old << ", encrypt_val(SESSION_USER), encrypt_val(NOW()::TEXT), encrypt_val('Eliminado')";
+    std::string quote_open, quote_close;
+    switch (gestor_db->getMotor()) {
+    case GestorAuditoria::MotorDB::PostgreSQL:
+        quote_open = "\""; quote_close = "\""; break;
+    case GestorAuditoria::MotorDB::MySQL:
+        quote_open = "`"; quote_close = "`"; break;
+    case GestorAuditoria::MotorDB::SQLServer:
+        quote_open = "["; quote_close = "]"; break;
+    default: break;
+    }
+
+    columnas_cifradas_lista << ", " << quote_open << cifrarNombreColumnaCesar("UsuarioAccion", desplazamiento_cesar) << quote_close
+        << ", " << quote_open << cifrarNombreColumnaCesar("FechaAccion", desplazamiento_cesar) << quote_close
+        << ", " << quote_open << cifrarNombreColumnaCesar("AccionSql", desplazamiento_cesar) << quote_close;
+
+    switch (gestor_db->getMotor()) {
+    case GestorAuditoria::MotorDB::PostgreSQL:
+        valores_insert_new << ", encrypt_val(SESSION_USER), encrypt_val(NOW()::TEXT), encrypt_val('Insertado')";
+        valores_update_old << ", encrypt_val(SESSION_USER), encrypt_val(NOW()::TEXT), encrypt_val('Modificado')";
+        valores_delete_old << ", encrypt_val(SESSION_USER), encrypt_val(NOW()::TEXT), encrypt_val('Eliminado')";
+        break;
+    case GestorAuditoria::MotorDB::MySQL:
+        valores_insert_new << ", encrypt_val(SUBSTRING_INDEX(CURRENT_USER(),'@',1)), encrypt_val(NOW()), encrypt_val('Insertado')";
+        valores_update_old << ", encrypt_val(SUBSTRING_INDEX(CURRENT_USER(),'@',1)), encrypt_val(NOW()), encrypt_val('Modificado')";
+        valores_delete_old << ", encrypt_val(SUBSTRING_INDEX(CURRENT_USER(),'@',1)), encrypt_val(NOW()), encrypt_val('Eliminado')";
+        break;
+    case GestorAuditoria::MotorDB::SQLServer:
+        valores_insert_new << ", EncryptByKey(Key_GUID('AuditoriaKey'), CAST(SUSER_SNAME() AS NVARCHAR(MAX))), EncryptByKey(Key_GUID('AuditoriaKey'), CAST(GETDATE() AS NVARCHAR(MAX))), EncryptByKey(Key_GUID('AuditoriaKey'), CAST('Insertado' AS NVARCHAR(MAX)))";
+        valores_update_old << ", EncryptByKey(Key_GUID('AuditoriaKey'), CAST(SUSER_SNAME() AS NVARCHAR(MAX))), EncryptByKey(Key_GUID('AuditoriaKey'), CAST(GETDATE() AS NVARCHAR(MAX))), EncryptByKey(Key_GUID('AuditoriaKey'), CAST('Modificado' AS NVARCHAR(MAX)))";
+        valores_delete_old << ", EncryptByKey(Key_GUID('AuditoriaKey'), CAST(SUSER_SNAME() AS NVARCHAR(MAX))), EncryptByKey(Key_GUID('AuditoriaKey'), CAST(GETDATE() AS NVARCHAR(MAX))), EncryptByKey(Key_GUID('AuditoriaKey'), CAST('Eliminado' AS NVARCHAR(MAX)))";
+        break;
+    default: break;
+    }
 
     datos["lista_columnas_cifradas"] = columnas_cifradas_lista.str();
     datos["valores_insert_new"] = valores_insert_new.str();
     datos["valores_update_old"] = valores_update_old.str();
     datos["valores_delete_old"] = valores_delete_old.str();
 
-    std::string sql_comando = env_plantillas.render_file("PostgresAuditCifrado.tpl", datos);
+    std::string plantilla_a_usar;
+    switch (gestor_db->getMotor()) {
+    case GestorAuditoria::MotorDB::PostgreSQL:
+        plantilla_a_usar = "PostgresAuditCifrado.tpl";
+        break;
+    case GestorAuditoria::MotorDB::MySQL:
+        plantilla_a_usar = "MySqlAuditCifrado.tpl";
+        break;
+    case GestorAuditoria::MotorDB::SQLServer:
+        plantilla_a_usar = "SqlServerAuditCifrado.tpl";
+        break;
+    default: return;
+    }
+
+    std::string sql_comando = env_plantillas.render_file(plantilla_a_usar, datos);
     gestor_db->ejecutarComando(sql_comando);
 }
 

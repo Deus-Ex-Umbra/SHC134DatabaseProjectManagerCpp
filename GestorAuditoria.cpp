@@ -70,39 +70,39 @@ void GestorAuditoria::ejecutarComando(const std::string& consulta) {
                 nanodbc::just_execute(*conn_odbc, NANODBC_TEXT(consulta));
             }
         }
-        else { // Para MySQL y SQLServer
+        else {
             std::string temp_consulta = consulta;
-            if (motor_actual == MotorDB::MySQL) {
-                // Lógica para MySQL que ya funciona
-                boost::replace_all(temp_consulta, "DELIMITER $$", "");
-                boost::replace_all(temp_consulta, "DELIMITER ;", "");
-                std::vector<std::string> statements;
-                boost::split(statements, temp_consulta, boost::is_any_of("$$"), boost::token_compress_on);
+            std::string delimitador = (motor_actual == MotorDB::SQLServer) ? "\nGO" : "$$";
+
+            boost::erase_all(temp_consulta, "DELIMITER $$");
+            boost::erase_all(temp_consulta, "DELIMITER ;");
+
+            std::vector<std::string> statements;
+            if (motor_actual == MotorDB::SQLServer) {
+                boost::split(statements, temp_consulta, boost::is_any_of("\n"), boost::token_compress_on);
+                std::string current_batch;
+                for (const auto& line : statements) {
+                    if (boost::trim_copy(line) == "GO") {
+                        if (!current_batch.empty()) {
+                            nanodbc::just_execute(*conn_odbc, NANODBC_TEXT(current_batch));
+                            current_batch = "";
+                        }
+                    }
+                    else {
+                        current_batch += line + "\n";
+                    }
+                }
+                if (!current_batch.empty()) {
+                    nanodbc::just_execute(*conn_odbc, NANODBC_TEXT(current_batch));
+                }
+
+            }
+            else {
+                boost::split(statements, temp_consulta, boost::is_any_of(delimitador), boost::token_compress_on);
                 for (std::string& stmt : statements) {
                     boost::algorithm::trim(stmt);
                     if (stmt.empty()) continue;
-                    if (boost::istarts_with(stmt, "END")) {
-                        stmt.erase(0, 3);
-                    }
                     nanodbc::just_execute(*conn_odbc, NANODBC_TEXT(stmt));
-                }
-            }
-            else if (motor_actual == MotorDB::SQLServer) {
-                // Lógica corregida para SQL Server
-                std::string::size_type start = 0;
-                std::string::size_type end = 0;
-                while ((end = temp_consulta.find("GO", start)) != std::string::npos) {
-                    std::string stmt = temp_consulta.substr(start, end - start);
-                    boost::algorithm::trim(stmt);
-                    if (!stmt.empty()) {
-                        nanodbc::just_execute(*conn_odbc, NANODBC_TEXT(stmt));
-                    }
-                    start = end + 2; // Moverse después del "GO"
-                }
-                std::string last_stmt = temp_consulta.substr(start);
-                boost::algorithm::trim(last_stmt);
-                if (!last_stmt.empty()) {
-                    nanodbc::just_execute(*conn_odbc, NANODBC_TEXT(last_stmt));
                 }
             }
         }
@@ -116,7 +116,6 @@ void GestorAuditoria::ejecutarComando(const std::string& consulta) {
         throw std::runtime_error(error_msg);
     }
 }
-
 
 std::vector<std::string> GestorAuditoria::obtenerNombresDeTablas(bool incluir_auditoria) {
     std::vector<std::string> tablas;
@@ -157,9 +156,19 @@ std::vector<std::string> GestorAuditoria::obtenerNombresDeTablas(bool incluir_au
 
 ResultadoConsulta GestorAuditoria::ejecutarConsultaConResultado(const std::string& consulta) {
     ResultadoConsulta resultado;
+    std::string consulta_modificada = consulta;
+
+    if (motor_actual == MotorDB::SQLServer && consulta.find("LIMIT 1") != std::string::npos) {
+        size_t select_pos = consulta_modificada.find("SELECT");
+        if (select_pos != std::string::npos) {
+            consulta_modificada.insert(select_pos + 6, " TOP 1 ");
+        }
+        boost::erase_last(consulta_modificada, "LIMIT 1");
+    }
+
     switch (motor_actual) {
     case MotorDB::PostgreSQL: {
-        PGresult* res = PQexec(conn_pg, consulta.c_str());
+        PGresult* res = PQexec(conn_pg, consulta_modificada.c_str());
         if (PQresultStatus(res) == PGRES_TUPLES_OK) {
             for (int j = 0; j < PQnfields(res); ++j) {
                 resultado.columnas.push_back(PQfname(res, j));
@@ -176,7 +185,7 @@ ResultadoConsulta GestorAuditoria::ejecutarConsultaConResultado(const std::strin
         break;
     }
     default: {
-        nanodbc::result res = nanodbc::execute(*conn_odbc, NANODBC_TEXT(consulta));
+        nanodbc::result res = nanodbc::execute(*conn_odbc, NANODBC_TEXT(consulta_modificada));
         for (short i = 0; i < res.columns(); ++i) {
             resultado.columnas.push_back(res.column_name(i));
         }
@@ -230,7 +239,7 @@ void GestorAuditoria::generarAuditoriaPostgreSQL(const std::string& nombre_tabla
 }
 
 void GestorAuditoria::generarAuditoriaSQLServer(const std::string& nombre_tabla) {
-    ejecutarComando("EXEC dbo.aud_trigger @tabla = '" + nombre_tabla + "'");
+    ejecutarComando("EXEC dbo.aud_trigger @tabla = N'" + nombre_tabla + "'");
 }
 
 void GestorAuditoria::generarAuditoriaMySQL(const std::string& nombre_tabla) {

@@ -15,6 +15,7 @@ DELIMITER ;
 DROP TRIGGER IF EXISTS insert_{{ tabla }}_aud_cifrado;
 DROP TRIGGER IF EXISTS update_{{ tabla }}_aud_cifrado;
 DROP TRIGGER IF EXISTS delete_{{ tabla }}_aud_cifrado;
+
 DELIMITER $$
 
 CREATE TRIGGER insert_{{ tabla }}_aud_cifrado
