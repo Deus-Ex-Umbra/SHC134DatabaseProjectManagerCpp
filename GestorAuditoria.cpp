@@ -70,28 +70,40 @@ void GestorAuditoria::ejecutarComando(const std::string& consulta) {
                 nanodbc::just_execute(*conn_odbc, NANODBC_TEXT(consulta));
             }
         }
-        else {
-            std::string delimitador = (motor_actual == MotorDB::SQLServer) ? "GO" : "DELIMITER ;";
-            std::vector<std::string> statements;
-
+        else { // Para MySQL y SQLServer
             std::string temp_consulta = consulta;
             if (motor_actual == MotorDB::MySQL) {
-                boost::replace_all(temp_consulta, "DELIMITER $$", "DELIMITER ;");
-                boost::replace_all(temp_consulta, "END$$", "END;");
-            }
-
-            boost::split(statements, temp_consulta, boost::is_any_of(delimitador), boost::token_compress_on);
-
-            for (std::string& stmt : statements) {
-                boost::algorithm::trim(stmt);
-                if (stmt.empty()) continue;
-
-                if (motor_actual == MotorDB::MySQL) {
-                    if (boost::istarts_with(stmt, "CREATE")) {
-                        // No hacer nada
+                // Lógica para MySQL que ya funciona
+                boost::replace_all(temp_consulta, "DELIMITER $$", "");
+                boost::replace_all(temp_consulta, "DELIMITER ;", "");
+                std::vector<std::string> statements;
+                boost::split(statements, temp_consulta, boost::is_any_of("$$"), boost::token_compress_on);
+                for (std::string& stmt : statements) {
+                    boost::algorithm::trim(stmt);
+                    if (stmt.empty()) continue;
+                    if (boost::istarts_with(stmt, "END")) {
+                        stmt.erase(0, 3);
                     }
+                    nanodbc::just_execute(*conn_odbc, NANODBC_TEXT(stmt));
                 }
-                nanodbc::just_execute(*conn_odbc, NANODBC_TEXT(stmt));
+            }
+            else if (motor_actual == MotorDB::SQLServer) {
+                // Lógica corregida para SQL Server
+                std::string::size_type start = 0;
+                std::string::size_type end = 0;
+                while ((end = temp_consulta.find("GO", start)) != std::string::npos) {
+                    std::string stmt = temp_consulta.substr(start, end - start);
+                    boost::algorithm::trim(stmt);
+                    if (!stmt.empty()) {
+                        nanodbc::just_execute(*conn_odbc, NANODBC_TEXT(stmt));
+                    }
+                    start = end + 2; // Moverse después del "GO"
+                }
+                std::string last_stmt = temp_consulta.substr(start);
+                boost::algorithm::trim(last_stmt);
+                if (!last_stmt.empty()) {
+                    nanodbc::just_execute(*conn_odbc, NANODBC_TEXT(last_stmt));
+                }
             }
         }
     }

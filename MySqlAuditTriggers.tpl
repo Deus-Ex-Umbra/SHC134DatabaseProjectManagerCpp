@@ -16,3 +16,4 @@ CREATE TRIGGER delete_{{ tabla }}_aud AFTER DELETE ON {{ tabla }} FOR EACH ROW
 BEGIN
     INSERT INTO aud_{{ tabla }} VALUES({{ campos_old }}, 'Eliminado');
 END$$
+DELIMITER ;
