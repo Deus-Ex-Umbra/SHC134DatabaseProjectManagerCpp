@@ -34,9 +34,9 @@ Una potente herramienta de línea de comandos para automatizar tareas complejas 
 
 La herramienta se invoca desde la terminal con la siguiente estructura:
 
-```bash
+$$$bash
 .\SHC134DatabaseProjectManagerCpp.exe <accion> [opciones]
-```
+$$$
 
 ### Opciones Comunes de Conexión
 
@@ -73,31 +73,31 @@ Genera una estructura completa de proyecto API con Nest.js a partir del esquema 
 
 **PostgreSQL (con Docker):**
 
-```bash
+$$$bash
 .\SHC134DatabaseProjectManagerCpp.exe scaffolding --motor postgres --host localhost --port 5432 --dbname nest_db --user root --password "root" --jwt-secret "MI_CLAVE_SECRETA_SUPER_SEGURA_123" --out mi-api-postgres
-```
+$$$
 
 **MySQL (con Docker):**
 
-```bash
+$$$bash
 .\SHC134DatabaseProjectManagerCpp.exe scaffolding --motor mysql --host localhost --port 3306 --dbname nest_db --user root --password "root" --jwt-secret "MI_CLAVE_SECRETA_SUPER_SEGURA_123" --out mi-api-mysql
-```
+$$$
 
 **SQL Server (con Docker):**
 
-```bash
+$$$bash
 .\SHC134DatabaseProjectManagerCpp.exe scaffolding --motor sqlserver --host localhost --port 1433 --dbname nest_db --user sa --password "Abcd1234" --jwt-secret "MI_CLAVE_SECRETA_SUPER_SEGURA_123" --out mi-api-sqlserver
-```
+$$$
 
 **SQLite:**
 
-```bash
+$$$bash
 .\SHC134DatabaseProjectManagerCpp.exe scaffolding --motor sqlite --dbname "C:\databases\mi_db.sqlite" --jwt-secret "MI_CLAVE_SECRETA_SUPER_SEGURA_123"
-```
+$$$
 
 ### Estructura del Proyecto Generado
 
-``` 
+$$$ 
 mi-api/
 ├── src/
 │   ├── main.ts
@@ -126,7 +126,7 @@ mi-api/
 ├── package.json                  # Con dependencias específicas del motor
 ├── tsconfig.json
 └── .env                          # Configuración de BD y JWT
-```
+$$$
 
 ## 📝 Auditoría
 
@@ -142,45 +142,45 @@ Crea tablas de auditoría (prefijo `aud_`) y triggers que registran automáticam
 
 **PostgreSQL - Auditar todas las tablas:**
 
-```bash
+$$$bash
 .\SHC134DatabaseProjectManagerCpp.exe auditoria --motor postgres --host localhost --port 5432 --dbname nest_db --user root --password "root"
-```
+$$$
 
 **MySQL - Auditar tabla específica:**
 
-```bash
+$$$bash
 .\SHC134DatabaseProjectManagerCpp.exe auditoria --motor mysql --host localhost --port 3306 --dbname nest_db --user root --password "root" --tabla usuarios
-```
+$$$
 
 **SQL Server - Auditar todas las tablas:**
 
-```bash
+$$$bash
 .\SHC134DatabaseProjectManagerCpp.exe auditoria --motor sqlserver --host localhost --port 1433 --dbname nest_db --user sa --password "Abcd1234"
-```
+$$$
 
 ### Verificación en Base de Datos
 
 **PostgreSQL:**
 
-```bash
+$$$bash
 docker exec -it postgres_db psql -U root -d nest_db
 \dt aud_*
-```
+$$$
 
 **MySQL:**
 
-```bash
+$$$bash
 docker exec -it mysql_db mysql -u root -p nest_db
 SHOW TABLES LIKE 'aud_%';
-```
+$$$
 
 **SQL Server:**
 
-```bash
+$$$bash
 docker exec -it sqlserver_db /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "Abcd1234" -d nest_db -N -C
 SELECT name FROM sys.tables WHERE name LIKE 'aud_%';
 GO
-```
+$$$
 
 ## 🔒 Encriptado
 
@@ -201,56 +201,56 @@ Gestiona el cifrado de las tablas de auditoría utilizando:
 
 **PowerShell:**
 
-```powershell
-$bytes = [byte[]]::new(32); (New-Object System.Security.Cryptography.RNGCryptoServiceProvider).GetBytes($bytes); [System.BitConverter]::ToString($bytes).Replace('-', '')
-```
+$$$powershell
+-join ((1..32) | ForEach {'{0:X2}' -f (Get-Random -Max 256)})
+$$$
 
 **Python:**
 
-```python
+$$$python
 import secrets
 print(secrets.token_hex(32))
-```
+$$$
 
 ### Ejemplos de Cifrado
 
 **PostgreSQL:**
 
-```bash
+$$$bash
 .\SHC134DatabaseProjectManagerCpp.exe encriptado --motor postgres --host localhost --port 5432 --dbname nest_db --user root --password "root" --key "A1B2C3D4E5F6789012345678901234567890ABCDEF123456789012345678ABCD" --encrypt-audit-tables
-```
+$$$
 
 **MySQL:**
 
-```bash
+$$$bash
 .\SHC134DatabaseProjectManagerCpp.exe encriptado --motor mysql --host localhost --port 3306 --dbname nest_db --user root --password "root" --key "A1B2C3D4E5F6789012345678901234567890ABCDEF123456789012345678ABCD" --encrypt-audit-tables
-```
+$$$
 
 **SQL Server:**
 
-```bash
+$$$bash
 .\SHC134DatabaseProjectManagerCpp.exe encriptado --motor sqlserver --host localhost --port 1433 --dbname nest_db --user sa --password "Abcd1234" --key "A1B2C3D4E5F6789012345678901234567890ABCDEF123456789012345678ABCD" --encrypt-audit-tables
-```
+$$$
 
 ### Consultas con Descifrado
 
 **PostgreSQL - Ver datos descifrados:**
 
-```bash
+$$$bash
 .\SHC134DatabaseProjectManagerCpp.exe sql --motor postgres --host localhost --port 5432 --dbname nest_db --user root --password "root" --key "A1B2C3D4E5F6789012345678901234567890ABCDEF123456789012345678ABCD" --query "SELECT * FROM aud_usuarios LIMIT 5"
-```
+$$$
 
 **MySQL - Consulta específica:**
 
-```bash
+$$$bash
 .\SHC134DatabaseProjectManagerCpp.exe sql --motor mysql --host localhost --port 3306 --dbname nest_db --user root --password "root" --key "A1B2C3D4E5F6789012345678901234567890ABCDEF123456789012345678ABCD" --query "SELECT * FROM aud_productos WHERE AccionSql = 'Modificado'"
-```
+$$$
 
 **SQL Server - Análisis de auditoría:**
 
-```bash
+$$$bash
 .\SHC134DatabaseProjectManagerCpp.exe sql --motor sqlserver --host localhost --port 1433 --dbname nest_db --user sa --password "Abcd1234" --key "A1B2C3D4E5F6789012345678901234567890ABCDEF123456789012345678ABCD" --query "SELECT TOP 10 * FROM aud_ventas ORDER BY FechaAccion DESC"
-```
+$$$
 
 ## 🔍 Consultas SQL
 
@@ -258,21 +258,21 @@ Ejecuta consultas SQL directas con soporte opcional para descifrado de datos.
 
 ### Consultas Sin Cifrado
 
-```bash
+$$$bash
 .\SHC134DatabaseProjectManagerCpp.exe sql --motor postgres --host localhost --port 5432 --dbname nest_db --user root --password "root" --query "SELECT COUNT(*) FROM usuarios"
-```
+$$$
 
 ### Consultas Con Descifrado
 
-```bash
+$$$bash
 .\SHC134DatabaseProjectManagerCpp.exe sql --motor mysql --host localhost --port 3306 --dbname nest_db --user root --password "root" --key "TU_CLAVE_HEX_64_CHARS" --query "SELECT * FROM aud_clientes"
-```
+$$$
 
 ## 🔧 Flujo de Trabajo Completo
 
 1. **Crear Base de Datos y Tablas**
 
-   ```sql
+   $$$sql
    -- Ejemplo para PostgreSQL
    CREATE TABLE usuarios (
        id SERIAL PRIMARY KEY,
@@ -287,33 +287,33 @@ Ejecuta consultas SQL directas con soporte opcional para descifrado de datos.
        precio DECIMAL(10,2),
        usuario_id INTEGER REFERENCES usuarios(id)
    );
-   ```
+   $$$
 
 2. **Generar Auditoría**
 
-   ```bash
+   $$$bash
    .\SHC134DatabaseProjectManagerCpp.exe auditoria --motor postgres --dbname nest_db --user root --password "root"
-   ```
+   $$$
 
 3. **Cifrar Tablas de Auditoría**
 
-   ```bash
+   $$$bash
    .\SHC134DatabaseProjectManagerCpp.exe encriptado --motor postgres --dbname nest_db --user root --password "root" --key "A1B2C3D4E5F6789012345678901234567890ABCDEF123456789012345678ABCD" --encrypt-audit-tables
-   ```
+   $$$
 
 4. **Generar API**
 
-   ```bash
+   $$$bash
    .\SHC134DatabaseProjectManagerCpp.exe scaffolding --motor postgres --dbname nest_db --user root --password "root" --jwt-secret "MI_JWT_SECRET" --out mi-api
-   ```
+   $$$
 
 5. **Ejecutar API**
 
-   ```bash
+   $$$bash
    cd mi-api
    npm install
    npm run start:dev
-   ```
+   $$$
 
 ## 📊 Seguridad
 
@@ -339,20 +339,60 @@ Ejecuta consultas SQL directas con soporte opcional para descifrado de datos.
 - Mantener respaldos de las tablas de auditoría.
 - Monitorear accesos no autorizados.
 
-## 🐛 Solución de Problemas
+## 🛠️ Configuración en Visual Studio 2022
 
-- **Error: "BLOB/TEXT column used in key specification"**  
-  Solución: El sistema maneja automáticamente los índices en MySQL durante el cifrado.
+Para compilar y ejecutar el proyecto en Visual Studio 2022, instala vcpkg y ejecuta los siguientes comandos para instalar las dependencias necesarias:
 
-- **Error: "Driver ODBC no encontrado"**  
-  Solución: Instalar el driver ODBC correspondiente:  
-  - MySQL: MySQL ODBC Connector.  
-  - SQL Server: ODBC Driver for SQL Server.  
-  - SQLite: SQLite ODBC Driver.
+**Boost:**
 
-- **La API no se conecta a la base de datos**  
-  Verificar:  
-  - Archivo `.env` con credenciales correctas.  
-  - Servicio de base de datos activo.  
-  - Puerto no bloqueado por firewall.  
-  - Dependencias npm instaladas correctamente.
+$$$bash
+vcpkg install boost --triplet x64-windows
+$$$
+
+**nlohmann/json (Para manejo de JSON):**
+
+$$$bash
+vcpkg install nlohmann-json --triplet x64-windows
+$$$
+
+**Inja (Motor de plantillas):**
+
+$$$bash
+vcpkg install inja --triplet x64-windows
+$$$
+
+**OpenSSL (Para cifrado):**
+
+$$$bash
+vcpkg install openssl --triplet x64-windows
+$$$
+
+**libpq (Cliente de PostgreSQL):**
+
+$$$bash
+vcpkg install libpq --triplet x64-windows
+$$$
+
+**nanodbc (Para conexiones ODBC):**
+
+$$$bash
+vcpkg install nanodbc --triplet x64-windows
+$$$
+
+Así funcionará el código.
+
+## 🌐 Interfaz Node
+
+Hay una carpeta llamada `InterfazNode`, que contiene la carpeta `public/index.html` y `app.js` en su interior. Estos dos deben ser copiados al directorio donde esté el `.exe`, además de copiar también allí los archivos `.tpl`. La carpeta suele ser `./x64/Release/`, y allí debería quedar:
+
+- `./public/index.html`
+- `app.js`
+- `{template}.tpl`
+
+Para que la interfaz funcione, basta con ejecutar:
+
+$$$bash
+node app.js
+$$$
+
+**Nota**: MySQL y SQLServer recibirán un soporte más estable.

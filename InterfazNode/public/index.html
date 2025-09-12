@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel de Control - DB Manager</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .form-section { display: none; }
+        .form-section.active { display: block; }
+        .sidebar-btn { transition: all 0.2s ease-in-out; }
+        .sidebar-btn.active { background-color: #4f46e5; color: white; }
+        .sidebar-btn:hover:not(.active) { background-color: #3730a3; }
+        .console-output { white-space: pre-wrap; word-wrap: break-word; }
+        .console-output .stdout { color: #e5e7eb; }
+        .console-output .stderr { color: #f87171; }
+        .console-output .info { color: #60a5fa; }
+        .code-block {
+            background-color: #1f2937;
+            border-radius: 0.5rem;
+            padding: 1rem;
+            position: relative;
+        }
+        .code-block pre {
+            margin: 0;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            overflow-wrap: anywhere;
+            padding-right: 80px;
+            font-size: 0.875rem;
+            line-height: 1.5;
+        }
+        .code-block button {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+        }
+        .title-container {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem; /* 12px */
+        }
+        .title-logo {
+            transition: filter 0.3s ease-in-out;
+        }
+        .title-container:hover .title-logo {
+            animation: glow 1.5s infinite alternate;
+        }
+        @keyframes glow {
+            0% {
+                filter: drop-shadow(0 0 5px #659AD2);
+            }
+            50% {
+                filter: drop-shadow(0 0 15px #FFD700);
+            }
+            100% {
+                filter: drop-shadow(0 0 5px #659AD2);
+            }
+        }
+    </style>
+     <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+</head>
+<body class="bg-gray-900 text-gray-200 flex h-screen">
+    <aside class="w-64 bg-gray-800 p-4 flex flex-col">
+        <div class="title-container text-2xl font-bold text-white mb-8 border-b border-gray-700 pb-4">
+            <h1>DB Manager</h1>
+            <svg class="title-logo" width="26" height="28" viewBox="0 0 13 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M13.0007 4.11722C13.0052 3.89929 12.9502 3.68426 12.8417 3.49522C12.7275 3.30972 12.566 3.15801 12.3737 3.05572C10.6424 2.09972 8.91019 1.14422 7.17719 0.189219C6.96828 0.0634091 6.7286 -0.00206839 6.48475 4.98104e-05C6.24089 0.00216801 6.00238 0.0717992 5.79569 0.201219C5.10669 0.590719 1.65819 2.48372 0.630191 3.05422C0.434684 3.15263 0.271481 3.30502 0.159914 3.49332C0.0483464 3.68163 -0.00690984 3.89797 0.000690745 4.11672V9.88622C-0.00436048 10.0993 0.0474135 10.3098 0.150691 10.4962C0.265441 10.6871 0.430452 10.8428 0.627691 10.9462C1.65569 11.5167 5.10469 13.4097 5.79369 13.7992C6.00029 13.9288 6.23875 13.9986 6.4826 14.0009C6.72646 14.0032 6.96619 13.9379 7.17519 13.8122C8.90519 12.8552 10.6362 11.8997 12.3682 10.9457C12.5655 10.8421 12.7306 10.6865 12.8457 10.4957C12.949 10.3093 13.0007 10.0988 12.9957 9.88572V4.11722" fill="#659AD2"/>
+                <path d="M12.775 10.5865C12.8012 10.5577 12.8258 10.5273 12.8485 10.4955C12.9518 10.3091 13.0035 10.0986 12.9985 9.88554V4.11704C13.003 3.89911 12.948 3.68408 12.8395 3.49504C12.8215 3.46554 12.795 3.44254 12.7745 3.41504L6.50049 7.00104L12.775 10.5865Z" fill="#00599C"/>
+                <path d="M12.7751 10.5865L6.50057 7.00098L0.226074 10.5865C0.331718 10.7357 0.470074 10.8589 0.630574 10.9465C1.65857 11.517 5.10757 13.41 5.79657 13.7995C6.00317 13.929 6.24163 13.9989 6.48549 14.0011C6.72935 14.0034 6.96907 13.9381 7.17807 13.8125C8.90807 12.8555 10.6391 11.9 12.3711 10.946C12.5313 10.8584 12.6695 10.7355 12.7751 10.5865Z" fill="#004482"/>
+                <path d="M8.30059 8.01103C8.07786 8.40712 7.73044 8.71848 7.3124 8.89664C6.89435 9.0748 6.42914 9.10976 5.98916 8.99609C5.54919 8.88243 5.15912 8.6265 4.87969 8.26815C4.60025 7.9098 4.44712 7.46912 4.44411 7.01471C4.44111 6.56029 4.58841 6.11763 4.86309 5.75562C5.13777 5.39361 5.52441 5.13255 5.96285 5.01308C6.40129 4.89361 6.86692 4.92243 7.28728 5.09505C7.70764 5.26767 8.05915 5.57441 8.28709 5.96753L10.0946 4.93103C9.6358 4.14367 8.93086 3.52901 8.08836 3.18171C7.24587 2.83441 6.31255 2.77376 5.43219 3.00908C4.55183 3.2444 3.77326 3.76265 3.21641 4.484C2.65957 5.20535 2.35534 6.08977 2.35059 7.00103C2.34931 7.72367 2.53905 8.43382 2.90059 9.05953C3.26634 9.69166 3.79208 10.2164 4.42494 10.5809C5.0578 10.9453 5.77548 11.1368 6.5058 11.1359C7.23612 11.1351 7.95334 10.9419 8.58534 10.5759C9.21734 10.21 9.74184 9.68402 10.1061 9.05103L8.30059 8.01103Z" fill="white"/>
+                <path d="M10.5384 6.77007H10.0754V6.30957H9.6129V6.77007H9.1499V7.23157H9.6129V7.69157H10.0754V7.23157H10.5384V6.77007ZM12.2749 6.77007H11.8119V6.30957H11.3489V6.77007H10.8859V7.23157H11.3489V7.69157H11.8119V7.23157H12.2749V6.77007Z" fill="white"/>
+            </svg>
+        </div>
+        <nav class="flex flex-col space-y-2">
+            <button data-target="scaffolding" class="sidebar-btn text-left p-3 rounded-lg active">🏗️ Scaffolding</button>
+            <button data-target="auditoria" class="sidebar-btn text-left p-3 rounded-lg">📝 Auditoría</button>
+            <button data-target="encriptado" class="sidebar-btn text-left p-3 rounded-lg">🔒 Encriptado</button>
+            <button data-target="sql" class="sidebar-btn text-left p-3 rounded-lg">🔍 Consulta SQL</button>
+        </nav>
+    </aside>
+
+    <main class="flex-1 p-8 overflow-y-auto">
+        <div id="forms-container">
+            <section id="scaffolding" class="form-section active">
+                <h2 class="text-3xl font-bold mb-6 text-indigo-400">Generar Proyecto Nest.js</h2>
+                <form class="space-y-4" data-action="scaffolding">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 db-common-fields"></div>
+                    <div>
+                        <label for="out-scaffolding" class="block mb-2 text-sm font-medium">Directorio de salida</label>
+                        <input type="text" id="out-scaffolding" name="out" class="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block w-full p-2.5" value="api-generada-nest">
+                    </div>
+                    <div>
+                        <label for="jwt-secret" class="block mb-2 text-sm font-medium">Secreto para JWT</label>
+                        <input type="text" id="jwt-secret" name="jwt-secret" class="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block w-full p-2.5" required>
+                    </div>
+
+                    <div class="bg-gray-800 p-4 rounded-lg">
+                        <label class="block mb-3 text-sm font-medium text-indigo-300">¿Necesitas una clave segura? Genera una con:</label>
+                        <div class="code-block mb-2">
+                            <pre><code id="node-command" class="text-gray-300">node -e "console.log(require('crypto').randomBytes(64).toString('base64'))"</code></pre>
+                            <button type="button" class="copy-btn text-sm bg-indigo-600 hover:bg-indigo-700 text-white py-1 px-3 rounded-md" data-clipboard-target="#node-command">Copiar</button>
+                        </div>
+                         <div class="code-block">
+                            <pre><code id="ps-command" class="text-gray-300">[System.Convert]::ToBase64String((1..64 | ForEach-Object {Get-Random -Maximum 256}) -as [byte[]])</code></pre>
+                            <button type="button" class="copy-btn text-sm bg-indigo-600 hover:bg-indigo-700 text-white py-1 px-3 rounded-md" data-clipboard-target="#ps-command">Copiar</button>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="w-full text-white bg-indigo-600 hover:bg-indigo-700 focus:ring-4 focus:outline-none focus:ring-indigo-500 font-medium rounded-lg text-sm px-5 py-2.5 text-center">Ejecutar Scaffolding</button>
+                </form>
+            </section>
+
+            <section id="auditoria" class="form-section">
+                <h2 class="text-3xl font-bold mb-6 text-indigo-400">Configurar Auditoría</h2>
+                <form class="space-y-4" data-action="auditoria">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 db-common-fields"></div>
+                    <div>
+                        <label for="tabla-auditoria" class="block mb-2 text-sm font-medium">Tabla Específica (opcional)</label>
+                        <input type="text" id="tabla-auditoria" name="tabla" class="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block w-full p-2.5" placeholder="Dejar en blanco para auditar todas las tablas">
+                    </div>
+                    <button type="submit" class="w-full text-white bg-indigo-600 hover:bg-indigo-700 focus:ring-4 focus:outline-none focus:ring-indigo-500 font-medium rounded-lg text-sm px-5 py-2.5 text-center">Ejecutar Auditoría</button>
+                </form>
+            </section>
+
+            <section id="encriptado" class="form-section">
+                 <h2 class="text-3xl font-bold mb-6 text-indigo-400">Gestión de Cifrado</h2>
+                <form class="space-y-4" data-action="encriptado">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 db-common-fields"></div>
+                    <div>
+                        <label for="key" class="block mb-2 text-sm font-medium">Clave de Cifrado (64 caracteres HEX)</label>
+                        <input type="text" id="key" name="key" class="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block w-full p-2.5" required pattern="[0-9a-fA-F]{64}">
+                    </div>
+
+                    <div class="bg-gray-800 p-4 rounded-lg">
+                        <label class="block mb-3 text-sm font-medium text-indigo-300">¿Necesitas una clave de cifrado segura? Genera una con:</label>
+                        <div class="code-block mb-2">
+                            <pre><code id="crypto-ps-command" class="text-gray-300">$bytes = [byte[]]::new(32); (New-Object System.Security.Cryptography.RNGCryptoServiceProvider).GetBytes($bytes); [System.BitConverter]::ToString($bytes).Replace('-', '')</code></pre>
+                            <button type="button" class="copy-btn text-sm bg-indigo-600 hover:bg-indigo-700 text-white py-1 px-3 rounded-md" data-clipboard-target="#crypto-ps-command">Copiar</button>
+                        </div>
+                        <div class="code-block">
+                            <pre><code id="crypto-node-command" class="text-gray-300">node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"</code></pre>
+                            <button type="button" class="copy-btn text-sm bg-indigo-600 hover:bg-indigo-700 text-white py-1 px-3 rounded-md" data-clipboard-target="#crypto-node-command">Copiar</button>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center p-4 rounded-lg bg-gray-800">
+                        <input id="encrypt-audit-tables-radio" type="checkbox" name="encrypt-audit-tables" class="w-4 h-4 text-indigo-600 bg-gray-700 border-gray-600 rounded focus:ring-indigo-500">
+                        <label for="encrypt-audit-tables-radio" class="ml-2 text-sm font-medium text-gray-300">Cifrar Tablas de Auditoría existentes</label>
+                    </div>
+
+                    <button type="submit" class="w-full text-white bg-indigo-600 hover:bg-indigo-700 focus:ring-4 focus:outline-none focus:ring-indigo-500 font-medium rounded-lg text-sm px-5 py-2.5 text-center">Ejecutar Cifrado</button>
+                </form>
+            </section>
+            
+            <section id="sql" class="form-section">
+                <h2 class="text-3xl font-bold mb-6 text-indigo-400">Ejecutar Consulta SQL</h2>
+                <form class="space-y-4" data-action="sql">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 db-common-fields"></div>
+                    <div>
+                        <label for="query-sql" class="block mb-2 text-sm font-medium">Consulta SQL</label>
+                        <textarea id="query-sql" name="query" rows="4" class="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block w-full p-2.5" required></textarea>
+                    </div>
+                    <div>
+                        <label for="key-sql" class="block mb-2 text-sm font-medium">Clave de descifrado (opcional, 64 HEX)</label>
+                        <input type="text" id="key-sql" name="key" class="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block w-full p-2.5" pattern="[0-9a-fA-F]{64}" placeholder="Dejar en blanco si la consulta no requiere descifrado">
+                    </div>
+                    <button type="submit" class="w-full text-white bg-indigo-600 hover:bg-indigo-700 focus:ring-4 focus:outline-none focus:ring-indigo-500 font-medium rounded-lg text-sm px-5 py-2.5 text-center">Ejecutar Consulta</button>
+                </form>
+            </section>
+        </div>
+
+        <div id="console" class="mt-8 bg-black rounded-lg p-4 h-96 overflow-y-auto">
+            <h3 class="text-lg font-semibold mb-2 border-b border-gray-700 pb-2">Salida del Proceso</h3>
+            <pre><code id="output" class="console-output"></code></pre>
+        </div>
+    </main>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const sidebarBtns = document.querySelectorAll('.sidebar-btn');
+            const formSections = document.querySelectorAll('.form-section');
+            const forms = document.querySelectorAll('form');
+            const outputElement = document.getElementById('output');
+            
+            const commonFieldsTemplate = `
+                <div>
+                    <label class="block mb-2 text-sm font-medium">Motor de BD</label>
+                    <select name="motor" class="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block w-full p-2.5">
+                        <option value="postgres">PostgreSQL</option>
+                        <option value="mysql">MySQL</option>
+                        <option value="sqlserver">SQL Server</option>
+                        <option value="sqlite">SQLite</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block mb-2 text-sm font-medium">Nombre/Ruta de la BD</label>
+                    <input type="text" name="dbname" class="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block w-full p-2.5" value="nest_db">
+                </div>
+                <div class="db-details">
+                    <label class="block mb-2 text-sm font-medium">Host</label>
+                    <input type="text" name="host" class="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block w-full p-2.5" value="localhost">
+                </div>
+                <div class="db-details">
+                    <label class="block mb-2 text-sm font-medium">Puerto</label>
+                    <input type="text" name="port" class="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block w-full p-2.5">
+                </div>
+                <div class="db-details">
+                    <label class="block mb-2 text-sm font-medium">Usuario</label>
+                    <input type="text" name="user" class="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block w-full p-2.5" value="root">
+                </div>
+                <div class="db-details">
+                    <label class="block mb-2 text-sm font-medium">Contraseña</label>
+                    <input type="password" name="password" class="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block w-full p-2.5" value="Abcd1234">
+                </div>
+            `;
+
+            document.querySelectorAll('.db-common-fields').forEach(container => {
+                container.innerHTML = commonFieldsTemplate;
+            });
+            
+            function updateDbFields(form) {
+                const motorSelect = form.querySelector('select[name="motor"]');
+                const portInput = form.querySelector('input[name="port"]');
+                const dbnameInput = form.querySelector('input[name="dbname"]');
+                const userInput = form.querySelector('input[name="user"]');
+                const detailsDivs = form.querySelectorAll('.db-details');
+                
+                const motor = motorSelect.value;
+                const isSqlite = motor === 'sqlite';
+
+                if (form.parentElement.id === 'encriptado' || form.parentElement.id === 'scaffolding') {
+                    const sqliteOption = motorSelect.querySelector('option[value="sqlite"]');
+                    if (sqliteOption) {
+                        sqliteOption.disabled = true;
+                    }
+                    if (motor === 'sqlite') {
+                       motorSelect.value = 'postgres'; 
+                    }
+                } else {
+                    const sqliteOption = motorSelect.querySelector('option[value="sqlite"]');
+                    if (sqliteOption) {
+                        sqliteOption.disabled = false;
+                    }
+                }
+
+                if (form.parentElement.id === 'sql') {
+                    const keySqlInput = form.querySelector('#key-sql');
+                    keySqlInput.disabled = isSqlite;
+                    if(isSqlite) keySqlInput.value = '';
+                }
+
+                detailsDivs.forEach(div => div.style.display = isSqlite ? 'none' : 'block');
+                
+                if (isSqlite) {
+                    dbnameInput.value = "C:\\Users\\yang_\\Desktop\\MateriasUniversidad\\SHC134\\PostgreSQL + NestJS\\sqlite_data\\nest_db.sqlite";
+                } else if (dbnameInput.value.includes("sqlite")) {
+                    dbnameInput.value = "nest_db";
+                }
+
+                if(motor === 'sqlserver') {
+                    userInput.value = 'sa';
+                } else if (userInput.value === 'sa') {
+                    userInput.value = 'root';
+                }
+
+                if (!portInput.value || !isSqlite) {
+                     switch(motor) {
+                        case 'postgres': portInput.value = '5432'; break;
+                        case 'mysql': portInput.value = '3306'; break;
+                        case 'sqlserver': portInput.value = '1433'; break;
+                        default: portInput.value = '';
+                    }
+                }
+            }
+
+            document.querySelectorAll('select[name="motor"]').forEach(select => {
+                select.addEventListener('change', (e) => updateDbFields(e.target.closest('form')));
+            });
+
+            document.querySelectorAll('form').forEach(form => {
+                updateDbFields(form);
+            });
+
+            sidebarBtns.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    sidebarBtns.forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    
+                    formSections.forEach(section => {
+                        section.classList.remove('active');
+                        if (section.id === btn.dataset.target) {
+                            section.classList.add('active');
+                        }
+                    });
+                });
+            });
+            
+            document.querySelectorAll('.copy-btn').forEach(button => {
+                button.addEventListener('click', (event) => {
+                    const targetSelector = event.target.dataset.clipboardTarget;
+                    const codeElement = document.querySelector(targetSelector);
+                    const textToCopy = codeElement.innerText;
+                    
+                    navigator.clipboard.writeText(textToCopy).then(() => {
+                        const originalText = event.target.innerText;
+                        event.target.innerText = '¡Copiado!';
+                        setTimeout(() => {
+                            event.target.innerText = originalText;
+                        }, 2000);
+                    });
+                });
+            });
+
+            forms.forEach(form => {
+                form.addEventListener('submit', async (e) => {
+                    e.preventDefault();
+                    
+                    outputElement.innerHTML = '';
+                    
+                    const formData = new FormData(e.target);
+                    const params = {};
+                    
+                    formData.forEach((value, key) => {
+                        if (e.target.elements[key].type === 'checkbox') {
+                            if (e.target.elements[key].checked) {
+                                params[key] = true;
+                            }
+                        } else if (value) {
+                            params[key] = value;
+                        }
+                    });
+                    
+                    const eventSource = new EventSource('http://localhost:9542/api/stream');
+                    
+                    eventSource.onmessage = (event) => {
+                        const parsedData = JSON.parse(event.data);
+                        const span = document.createElement('span');
+                        span.className = parsedData.type;
+                        span.textContent = parsedData.data;
+                        outputElement.appendChild(span);
+                        outputElement.parentElement.scrollTop = outputElement.parentElement.scrollHeight;
+                    };
+                    
+                     eventSource.onerror = () => {
+                        eventSource.close();
+                    };
+
+                    try {
+                         await fetch('http://localhost:9542/api/execute', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                action: e.target.dataset.action,
+                                params: params
+                            })
+                        });
+                    } catch (error) {
+                        const span = document.createElement('span');
+                        span.className = 'stderr';
+                        span.textContent = `Error al conectar con el servidor: ${error.message}`;
+                        outputElement.appendChild(span);
+                    }
+                });
+            });
+        });
+    </script>
+</body>
+</html>

@@ -283,11 +283,12 @@ void GeneradorCodigo::generarProyectoCompleto(const std::vector<Tabla>& tablas, 
 void GeneradorCodigo::generarArchivoEnv(const std::string& motor_db, const std::string& host, const std::string& puerto, const std::string& usuario, const std::string& contrasena, const std::string& base_datos, const std::string& jwt_secret) {
     std::cout << "Generando archivo .env con configuraciones de base de datos..." << std::endl;
     std::string tipo_db = (motor_db == "postgres") ? "postgres" : (motor_db == "mysql") ? "mysql" : (motor_db == "sqlserver" || motor_db == "mssql") ? "mssql" : (motor_db == "sqlite") ? "sqlite" : "postgres";
+    std::string usuario_db = (tipo_db == "mssql") ? "sa" : usuario;
     std::string contenido_env = "# Configuracion de Base de Datos\n";
     contenido_env += "DB_TYPE=" + tipo_db + "\n";
     contenido_env += "DB_HOST=" + host + "\n";
     contenido_env += "DB_PORT=" + puerto + "\n";
-    contenido_env += "DB_USERNAME=" + usuario + "\n";
+    contenido_env += "DB_USERNAME=" + usuario_db + "\n";
     contenido_env += "DB_PASSWORD=\"" + contrasena + "\"\n";
     contenido_env += "DB_DATABASE=" + base_datos + "\n\n";
     contenido_env += "# Configuracion JWT\n";

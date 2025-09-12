@@ -38,8 +38,7 @@ std::string construirCadenaConexion(const po::variables_map& vm, GestorAuditoria
     else if (motor == GestorAuditoria::MotorDB::SQLServer) {
         std::string driver = vm.count("driver") ? vm["driver"].as<std::string>() : "ODBC Driver 17 for SQL Server";
         return "DRIVER={" + driver + "};"
-            "SERVER=" + host + ";"
-            "PORT=" + port + ";"
+            "SERVER=" + host + "," + port + ";"
             "DATABASE=" + dbname + ";"
             "UID=" + user + ";"
             "PWD=" + password + ";"

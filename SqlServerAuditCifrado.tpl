@@ -9,7 +9,7 @@ AS
 BEGIN
     SET NOCOUNT ON;
     OPEN SYMMETRIC KEY AuditoriaKey DECRYPTION BY CERTIFICATE AuditoriaCert;
-    
+
     DECLARE @pk_col NVARCHAR(128);
     SELECT @pk_col = c.name
     FROM sys.indexes i
@@ -21,15 +21,13 @@ BEGIN
     BEGIN
         INSERT INTO dbo.{{ tabla_auditoria }} ({{ lista_columnas_cifradas }})
         SELECT {{ valores_insert_new }}
-        FROM inserted i
-        INNER JOIN dbo.{{ tabla }} t ON i.[@pk_col] = t.[@pk_col];
+        FROM inserted i;
     END
     ELSE IF EXISTS(SELECT * FROM inserted) AND EXISTS(SELECT * FROM deleted)
     BEGIN
         INSERT INTO dbo.{{ tabla_auditoria }} ({{ lista_columnas_cifradas }})
         SELECT {{ valores_update_old }}
-        FROM deleted d
-        INNER JOIN dbo.{{ tabla }} t ON d.[@pk_col] = t.[@pk_col];
+        FROM deleted d;
     END
     ELSE IF EXISTS(SELECT * FROM deleted)
     BEGIN
@@ -37,7 +35,7 @@ BEGIN
         SELECT {{ valores_delete_old }}
         FROM deleted d;
     END
-    
+
     CLOSE SYMMETRIC KEY AuditoriaKey;
 END;
 GO
