@@ -1,37 +1,32 @@
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
 DROP TRIGGER IF EXISTS {{ tabla }}_aud_trigger ON public.{{ tabla }};
-DROP FUNCTION IF EXISTS public.{{ tabla }}_aud();
+DROP FUNCTION IF EXISTS public.{{ tabla }}_aud() CASCADE;
 DROP TRIGGER IF EXISTS {{ tabla }}_aud_cifrado_trigger ON public.{{ tabla }};
-DROP FUNCTION IF EXISTS public.{{ tabla }}_aud_cifrado();
+DROP FUNCTION IF EXISTS public.{{ tabla }}_aud_cifrado() CASCADE;
 
 CREATE OR REPLACE FUNCTION public.{{ tabla }}_aud_cifrado()
 RETURNS TRIGGER AS $$
 BEGIN
     IF TG_OP = 'INSERT' THEN
         INSERT INTO public.{{ tabla_auditoria }}(
-            {{ lista_columnas_cifradas }},
-            "UsuarioAccion", "FechaAccion", "AccionSql"
+            {{ lista_columnas_cifradas }}
         ) VALUES (
-            {{ lista_valores_cifrados_new }},
-            SESSION_USER, NOW(), 'Insertado'
+            {{ valores_insert_new }}
         );
         RETURN NEW;
     ELSIF TG_OP = 'UPDATE' THEN
         INSERT INTO public.{{ tabla_auditoria }}(
-            {{ lista_columnas_cifradas }},
-            "UsuarioAccion", "FechaAccion", "AccionSql"
+            {{ lista_columnas_cifradas }}
         ) VALUES (
-            {{ lista_valores_cifrados_old }},
-            SESSION_USER, NOW(), 'Modificado'
+            {{ valores_update_old }}
         );
         RETURN NEW;
     ELSIF TG_OP = 'DELETE' THEN
         INSERT INTO public.{{ tabla_auditoria }}(
-            {{ lista_columnas_cifradas }},
-            "UsuarioAccion", "FechaAccion", "AccionSql"
+            {{ lista_columnas_cifradas }}
         ) VALUES (
-            {{ lista_valores_cifrados_old }},
-            SESSION_USER, NOW(), 'Eliminado'
+            {{ valores_delete_old }}
         );
         RETURN OLD;
     END IF;
