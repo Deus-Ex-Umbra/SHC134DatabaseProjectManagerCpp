@@ -6,6 +6,9 @@ DETERMINISTIC
 BEGIN
     DECLARE iv VARBINARY(16);
     DECLARE encrypted_data TEXT;
+    IF data_to_encrypt IS NULL OR data_to_encrypt = 'NULL' THEN
+        RETURN data_to_encrypt;
+    END IF;
     SET iv = RANDOM_BYTES(16);
     SET encrypted_data = HEX(AES_ENCRYPT(data_to_encrypt, UNHEX('{{ clave_hex }}'), iv));
     RETURN CONCAT(HEX(iv), encrypted_data);

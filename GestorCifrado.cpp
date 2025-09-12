@@ -259,68 +259,80 @@ void GestorCifrado::cifrarTablasDeAuditoria() {
             if (mapa_columnas.empty()) continue;
 
             auto datos_actuales = gestor_db->ejecutarConsultaConResultado("SELECT * FROM " + tabla);
-            if (datos_actuales.filas.empty()) {
-                std::cout << "Tabla " << tabla << " sin datos, renombrando columnas..." << std::endl;
-                for (const auto& par : mapa_columnas) {
-                    std::string rename_sql;
-                    switch (gestor_db->getMotor()) {
-                    case GestorAuditoria::MotorDB::PostgreSQL:
-                        rename_sql = "ALTER TABLE public.\"" + tabla + "\" RENAME COLUMN \"" + par.first + "\" TO \"" + par.second + "\"";
-                        break;
-                    case GestorAuditoria::MotorDB::MySQL:
-                        rename_sql = "ALTER TABLE `" + tabla + "` RENAME COLUMN `" + par.first + "` TO `" + par.second + "`";
-                        break;
-                    case GestorAuditoria::MotorDB::SQLServer:
-                        rename_sql = "EXEC sp_rename '" + tabla + "." + par.first + "', '" + par.second + "', 'COLUMN'";
-                        break;
-                    default: continue;
-                    }
-                    gestor_db->ejecutarComando(rename_sql);
+
+            if (!datos_actuales.filas.empty()) {
+                std::cout << "Cifrando " << datos_actuales.filas.size() << " filas de datos existentes..." << std::endl;
+
+                if (gestor_db->getMotor() == GestorAuditoria::MotorDB::MySQL) {
+                    gestor_db->ejecutarComando("DELETE FROM " + tabla);
                 }
-                continue;
-            }
+                else if (gestor_db->getMotor() == GestorAuditoria::MotorDB::PostgreSQL) {
+                    gestor_db->ejecutarComando("TRUNCATE TABLE public.\"" + tabla + "\"");
+                }
+                else if (gestor_db->getMotor() == GestorAuditoria::MotorDB::SQLServer) {
+                    gestor_db->ejecutarComando("TRUNCATE TABLE dbo.[" + tabla + "]");
+                }
 
-            if (gestor_db->getMotor() == GestorAuditoria::MotorDB::MySQL) {
-                gestor_db->ejecutarComando("CREATE TEMPORARY TABLE temp_" + tabla + " AS SELECT * FROM " + tabla);
-                gestor_db->ejecutarComando("TRUNCATE TABLE " + tabla);
-            }
+                for (const auto& fila : datos_actuales.filas) {
+                    std::ostringstream insert_sql;
+                    std::ostringstream values_sql;
 
-            for (const auto& fila : datos_actuales.filas) {
-                std::ostringstream insert_sql;
-                std::ostringstream values_sql;
-                insert_sql << "INSERT INTO " << tabla << " (";
-                values_sql << ") VALUES (";
-
-                bool first = true;
-                for (size_t i = 0; i < datos_actuales.columnas.size(); ++i) {
-                    if (!first) {
-                        insert_sql << ", ";
-                        values_sql << ", ";
-                    }
-
-                    std::string col_name_quoted;
                     switch (gestor_db->getMotor()) {
                     case GestorAuditoria::MotorDB::PostgreSQL:
-                        col_name_quoted = "\"" + datos_actuales.columnas[i] + "\"";
+                        insert_sql << "INSERT INTO public.\"" << tabla << "\" (";
                         break;
                     case GestorAuditoria::MotorDB::MySQL:
-                        col_name_quoted = "`" + datos_actuales.columnas[i] + "`";
+                        insert_sql << "INSERT INTO `" << tabla << "` (";
                         break;
                     case GestorAuditoria::MotorDB::SQLServer:
-                        col_name_quoted = "[" + datos_actuales.columnas[i] + "]";
+                        insert_sql << "INSERT INTO dbo.[" << tabla << "] (";
                         break;
                     default:
-                        col_name_quoted = datos_actuales.columnas[i];
+                        insert_sql << "INSERT INTO " << tabla << " (";
                     }
 
-                    insert_sql << col_name_quoted;
-                    std::string valor_cifrado = cifrarValor(fila[i]);
-                    boost::replace_all(valor_cifrado, "'", "''");
-                    values_sql << "'" << valor_cifrado << "'";
-                    first = false;
-                }
+                    values_sql << ") VALUES (";
 
-                gestor_db->ejecutarComando(insert_sql.str() + values_sql.str());
+                    bool first = true;
+                    for (size_t i = 0; i < datos_actuales.columnas.size(); ++i) {
+                        if (!first) {
+                            insert_sql << ", ";
+                            values_sql << ", ";
+                        }
+
+                        std::string col_name_quoted;
+                        switch (gestor_db->getMotor()) {
+                        case GestorAuditoria::MotorDB::PostgreSQL:
+                            col_name_quoted = "\"" + datos_actuales.columnas[i] + "\"";
+                            break;
+                        case GestorAuditoria::MotorDB::MySQL:
+                            col_name_quoted = "`" + datos_actuales.columnas[i] + "`";
+                            break;
+                        case GestorAuditoria::MotorDB::SQLServer:
+                            col_name_quoted = "[" + datos_actuales.columnas[i] + "]";
+                            break;
+                        default:
+                            col_name_quoted = datos_actuales.columnas[i];
+                        }
+
+                        insert_sql << col_name_quoted;
+
+                        std::string valor_cifrado = cifrarValor(fila[i]);
+                        boost::replace_all(valor_cifrado, "'", "''");
+
+                        if (gestor_db->getMotor() == GestorAuditoria::MotorDB::SQLServer) {
+                            values_sql << "N'" << valor_cifrado << "'";
+                        }
+                        else {
+                            values_sql << "'" << valor_cifrado << "'";
+                        }
+
+                        first = false;
+                    }
+
+                    values_sql << ")";
+                    gestor_db->ejecutarComando(insert_sql.str() + values_sql.str());
+                }
             }
 
             for (const auto& par : mapa_columnas) {
@@ -455,9 +467,9 @@ void GestorCifrado::actualizarTriggersParaCifrado(const std::string& nombre_tabl
             valores_delete_old << "EncryptByKey(Key_GUID('AuditoriaKey'), CAST(" << record_prefix_old << quote_open << col_name << quote_close << " AS NVARCHAR(MAX))" << cast_str;
         }
         else {
-            valores_insert_new << "encrypt_val(" << record_prefix_new << quote_open << col_name << quote_close << ")";
-            valores_update_old << "encrypt_val(" << record_prefix_old << quote_open << col_name << quote_close << ")";
-            valores_delete_old << "encrypt_val(" << record_prefix_old << quote_open << col_name << quote_close << ")";
+            valores_insert_new << "encrypt_val(" << record_prefix_new << quote_open << col_name << quote_close << cast_str << ")";
+            valores_update_old << "encrypt_val(" << record_prefix_old << quote_open << col_name << quote_close << cast_str << ")";
+            valores_delete_old << "encrypt_val(" << record_prefix_old << quote_open << col_name << quote_close << cast_str << ")";
         }
 
         first = false;
@@ -480,14 +492,14 @@ void GestorCifrado::actualizarTriggersParaCifrado(const std::string& nombre_tabl
 
     switch (gestor_db->getMotor()) {
     case GestorAuditoria::MotorDB::PostgreSQL:
-        valores_insert_new << ", encrypt_val(SESSION_USER), encrypt_val(NOW()::TEXT), encrypt_val('Insertado')";
-        valores_update_old << ", encrypt_val(SESSION_USER), encrypt_val(NOW()::TEXT), encrypt_val('Modificado')";
-        valores_delete_old << ", encrypt_val(SESSION_USER), encrypt_val(NOW()::TEXT), encrypt_val('Eliminado')";
+        valores_insert_new << ", encrypt_val(SESSION_USER::TEXT), encrypt_val(NOW()::TEXT), encrypt_val('Insertado')";
+        valores_update_old << ", encrypt_val(SESSION_USER::TEXT), encrypt_val(NOW()::TEXT), encrypt_val('Modificado')";
+        valores_delete_old << ", encrypt_val(SESSION_USER::TEXT), encrypt_val(NOW()::TEXT), encrypt_val('Eliminado')";
         break;
     case GestorAuditoria::MotorDB::MySQL:
-        valores_insert_new << ", encrypt_val(SUBSTRING_INDEX(CURRENT_USER(),'@',1)), encrypt_val(NOW()), encrypt_val('Insertado')";
-        valores_update_old << ", encrypt_val(SUBSTRING_INDEX(CURRENT_USER(),'@',1)), encrypt_val(NOW()), encrypt_val('Modificado')";
-        valores_delete_old << ", encrypt_val(SUBSTRING_INDEX(CURRENT_USER(),'@',1)), encrypt_val(NOW()), encrypt_val('Eliminado')";
+        valores_insert_new << ", encrypt_val(SUBSTRING_INDEX(CURRENT_USER(),'@',1)), encrypt_val(CAST(NOW() AS CHAR)), encrypt_val('Insertado')";
+        valores_update_old << ", encrypt_val(SUBSTRING_INDEX(CURRENT_USER(),'@',1)), encrypt_val(CAST(NOW() AS CHAR)), encrypt_val('Modificado')";
+        valores_delete_old << ", encrypt_val(SUBSTRING_INDEX(CURRENT_USER(),'@',1)), encrypt_val(CAST(NOW() AS CHAR)), encrypt_val('Eliminado')";
         break;
     case GestorAuditoria::MotorDB::SQLServer:
         valores_insert_new << ", EncryptByKey(Key_GUID('AuditoriaKey'), CAST(SUSER_SNAME() AS NVARCHAR(MAX))), EncryptByKey(Key_GUID('AuditoriaKey'), CAST(GETDATE() AS NVARCHAR(MAX))), EncryptByKey(Key_GUID('AuditoriaKey'), CAST('Insertado' AS NVARCHAR(MAX)))";
