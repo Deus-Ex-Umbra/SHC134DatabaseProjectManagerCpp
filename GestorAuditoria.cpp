@@ -58,59 +58,50 @@ GestorAuditoria::MotorDB GestorAuditoria::getMotor() const {
 
 void GestorAuditoria::ejecutarComando(const std::string& consulta) {
     try {
-        if (motor_actual == MotorDB::PostgreSQL) {
-            PGresult* res = PQexec(conn_pg, consulta.c_str());
-            if (PQresultStatus(res) != PGRES_COMMAND_OK && PQresultStatus(res) != PGRES_TUPLES_OK) {
-                throw std::runtime_error(PQerrorMessage(conn_pg));
+        if (motor_actual == MotorDB::PostgreSQL || motor_actual == MotorDB::SQLite) {
+            if (motor_actual == MotorDB::PostgreSQL) {
+                PGresult* res = PQexec(conn_pg, consulta.c_str());
+                if (PQresultStatus(res) != PGRES_COMMAND_OK && PQresultStatus(res) != PGRES_TUPLES_OK) {
+                    throw std::runtime_error(PQerrorMessage(conn_pg));
+                }
+                PQclear(res);
             }
-            PQclear(res);
+            else {
+                nanodbc::just_execute(*conn_odbc, NANODBC_TEXT(consulta));
+            }
         }
         else {
+            std::string delimitador = (motor_actual == MotorDB::SQLServer) ? "GO" : "DELIMITER ;";
             std::vector<std::string> statements;
-            if (motor_actual == MotorDB::SQLServer) {
-                boost::split(statements, consulta, boost::is_any_of("\n"), boost::token_compress_on);
-                std::string current_batch;
-                for (const auto& line : statements) {
-                    if (boost::trim_copy(line) == "GO") {
-                        if (!current_batch.empty()) {
-                            nanodbc::just_execute(*conn_odbc, NANODBC_TEXT(current_batch));
-                            current_batch.clear();
-                        }
-                    }
-                    else {
-                        current_batch += line + "\n";
-                    }
-                }
-                if (!current_batch.empty()) {
-                    nanodbc::just_execute(*conn_odbc, NANODBC_TEXT(current_batch));
-                }
+
+            std::string temp_consulta = consulta;
+            if (motor_actual == MotorDB::MySQL) {
+                boost::replace_all(temp_consulta, "DELIMITER $$", "DELIMITER ;");
+                boost::replace_all(temp_consulta, "END$$", "END;");
             }
-            else if (motor_actual == MotorDB::MySQL) {
-                std::string processed_query = consulta;
-                boost::replace_all(processed_query, "DELIMITER $$", "---DELIMITER---");
-                boost::replace_all(processed_query, "END$$", "---DELIMITER---");
-                boost::split(statements, processed_query, boost::is_any_of("---DELIMITER---"), boost::token_compress_on);
-                for (const auto& stmt : statements) {
-                    if (!boost::trim_copy(stmt).empty()) {
-                        nanodbc::just_execute(*conn_odbc, NANODBC_TEXT(stmt));
+
+            boost::split(statements, temp_consulta, boost::is_any_of(delimitador), boost::token_compress_on);
+
+            for (std::string& stmt : statements) {
+                boost::algorithm::trim(stmt);
+                if (stmt.empty()) continue;
+
+                if (motor_actual == MotorDB::MySQL) {
+                    if (boost::istarts_with(stmt, "CREATE")) {
+                        // No hacer nada
                     }
                 }
-            }
-            else { // SQLite
-                boost::split(statements, consulta, boost::is_any_of(";"), boost::token_compress_on);
-                for (const auto& stmt : statements) {
-                    if (!boost::trim_copy(stmt).empty()) {
-                        nanodbc::just_execute(*conn_odbc, NANODBC_TEXT(stmt));
-                    }
-                }
+                nanodbc::just_execute(*conn_odbc, NANODBC_TEXT(stmt));
             }
         }
     }
     catch (const nanodbc::database_error& e) {
-        throw std::runtime_error("Error de Nanodbc: " + std::string(e.what()));
+        std::string error_msg = "Error de Nanodbc: " + std::string(e.what());
+        throw std::runtime_error(error_msg);
     }
     catch (const std::exception& e) {
-        throw std::runtime_error("Error General: " + std::string(e.what()));
+        std::string error_msg = "Error General: " + std::string(e.what());
+        throw std::runtime_error(error_msg);
     }
 }
 
@@ -227,7 +218,7 @@ void GestorAuditoria::generarAuditoriaPostgreSQL(const std::string& nombre_tabla
 }
 
 void GestorAuditoria::generarAuditoriaSQLServer(const std::string& nombre_tabla) {
-    ejecutarComando("EXEC dbo.aud_trigger @tabla = N'" + nombre_tabla + "'");
+    ejecutarComando("EXEC dbo.aud_trigger @tabla = '" + nombre_tabla + "'");
 }
 
 void GestorAuditoria::generarAuditoriaMySQL(const std::string& nombre_tabla) {
