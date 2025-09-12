@@ -1,18 +1,53 @@
-DROP FUNCTION IF EXISTS fcampos;
-CREATE FUNCTION fcampos (tabla TEXT) RETURNS TEXT CHARSET utf8mb4 DETERMINISTIC BEGIN DECLARE valores TEXT DEFAULT '';
-DECLARE nombre TEXT; DECLARE tipo TEXT; DECLARE finished INT DEFAULT 0;
-DECLARE cur CURSOR FOR SELECT column_name, column_type FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = tabla ORDER BY ordinal_position;
-DECLARE CONTINUE HANDLER FOR NOT FOUND SET finished = 1; OPEN cur; Bucle: LOOP FETCH cur INTO nombre, tipo;
-IF finished THEN LEAVE Bucle; END IF; SET valores = CONCAT(valores, nombre, ' TEXT, '); END LOOP;
-CLOSE cur; SET valores = CONCAT(valores, 'UsuarioAccion TEXT, FechaAccion DATETIME, AccionSql TEXT'); RETURN valores; END;
-DROP FUNCTION IF EXISTS fcampos2;
-CREATE FUNCTION fcampos2 (tabla TEXT, prefijo TEXT) RETURNS TEXT CHARSET utf8mb4 DETERMINISTIC BEGIN DECLARE valores TEXT DEFAULT '';
-DECLARE nombre TEXT; DECLARE finished INT DEFAULT 0; DECLARE cur CURSOR FOR SELECT column_name FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = tabla ORDER BY ordinal_position;
-DECLARE CONTINUE HANDLER FOR NOT FOUND SET finished = 1; OPEN cur; Bucle: LOOP FETCH cur INTO nombre;
-IF finished THEN LEAVE Bucle; END IF; SET valores = CONCAT(valores, prefijo, '.', nombre, ', '); END LOOP; CLOSE cur;
-SET valores = CONCAT(valores, 'SUBSTRING_INDEX(CURRENT_USER(),''@'',1), NOW()'); RETURN valores; END;
-DROP PROCEDURE IF EXISTS aud_trigger;
-CREATE PROCEDURE aud_trigger(tabla TEXT) BEGIN DECLARE campos TEXT; SET campos = fcampos(tabla);
-SET @sql = CONCAT('DROP TABLE IF EXISTS aud_', tabla); PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
-SET @sql = CONCAT('CREATE TABLE aud_', tabla, ' (', campos, ')'); PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
-END;
+DELIMITER $$
+DROP FUNCTION IF EXISTS fcampos$$
+CREATE FUNCTION fcampos (tabla TEXT) RETURNS TEXT CHARSET utf8mb4 DETERMINISTIC
+BEGIN
+    DECLARE valores TEXT DEFAULT '';
+    DECLARE nombre TEXT;
+    DECLARE finished INT DEFAULT 0;
+    DECLARE cur CURSOR FOR SELECT column_name FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = tabla ORDER BY ordinal_position;
+    DECLARE CONTINUE HANDLER FOR NOT FOUND SET finished = 1;
+    OPEN cur;
+    Bucle: LOOP
+        FETCH cur INTO nombre;
+        IF finished THEN LEAVE Bucle; END IF;
+        SET valores = CONCAT(valores, '`', nombre, '` TEXT, ');
+    END LOOP;
+    CLOSE cur;
+    SET valores = CONCAT(valores, '`UsuarioAccion` TEXT, `FechaAccion` TEXT, `AccionSql` TEXT');
+    RETURN valores;
+END$$
+
+DROP FUNCTION IF EXISTS fcampos2$$
+CREATE FUNCTION fcampos2 (tabla TEXT, prefijo TEXT) RETURNS TEXT CHARSET utf8mb4 DETERMINISTIC
+BEGIN
+    DECLARE valores TEXT DEFAULT '';
+    DECLARE nombre TEXT;
+    DECLARE finished INT DEFAULT 0;
+    DECLARE cur CURSOR FOR SELECT column_name FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = tabla ORDER BY ordinal_position;
+    DECLARE CONTINUE HANDLER FOR NOT FOUND SET finished = 1;
+    OPEN cur;
+    Bucle: LOOP
+        FETCH cur INTO nombre;
+        IF finished THEN LEAVE Bucle; END IF;
+        SET valores = CONCAT(valores, prefijo, '.', nombre, ', ');
+    END LOOP;
+    CLOSE cur;
+    SET valores = CONCAT(valores, 'SUBSTRING_INDEX(CURRENT_USER(),''@'',1), NOW()');
+    RETURN valores;
+END$$
+
+DROP PROCEDURE IF EXISTS aud_trigger$$
+CREATE PROCEDURE aud_trigger(tabla TEXT)
+BEGIN
+    DECLARE campos TEXT;
+    SET campos = fcampos(tabla);
+    SET @sql_text = CONCAT('DROP TABLE IF EXISTS aud_', tabla);
+    PREPARE stmt FROM @sql_text;
+    EXECUTE stmt;
+    DEALLOCATE PREPARE stmt;
+    SET @sql_text = CONCAT('CREATE TABLE aud_', tabla, ' (', campos, ')');
+    PREPARE stmt FROM @sql_text;
+    EXECUTE stmt;
+    DEALLOCATE PREPARE stmt;
+END$$

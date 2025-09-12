@@ -29,7 +29,7 @@ std::string construirCadenaConexion(const po::variables_map& vm, GestorAuditoria
             " password=" + password;
     }
     else if (motor == GestorAuditoria::MotorDB::MySQL) {
-        return "DRIVER={MySQL ODBC 9.4 Unicode Driver};"
+        return "DRIVER={MySQL ODBC 8.0 Unicode Driver};"
             "SERVER=" + host + ";"
             "PORT=" + port + ";"
             "DATABASE=" + dbname + ";"
