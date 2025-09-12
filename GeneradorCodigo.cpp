@@ -34,7 +34,78 @@ std::string GeneradorCodigo::renderizarPlantilla(const std::string& ruta_plantil
     }
 }
 
-void GeneradorCodigo::generarArchivosBase(const json& datos_modulos) {
+void GeneradorCodigo::generarPackageJson(const std::string& motor_db) {
+    json datos_package;
+    datos_package["nombre"] = "generated-api";
+    datos_package["version"] = "0.0.1";
+
+    std::string dependencias_base = R"({
+  "name": "generated-api",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "build": "nest build",
+    "start": "nest start",
+    "start:dev": "nest start --watch",
+    "start:prod": "node dist/main"
+  },
+  "dependencies": {
+    "@nestjs/common": "^10.0.0",
+    "@nestjs/core": "^10.0.0",
+    "@nestjs/config": "^3.2.2",
+    "@nestjs/jwt": "^10.2.0",
+    "@nestjs/mapped-types": "^2.0.5",
+    "@nestjs/passport": "^10.0.3",
+    "@nestjs/platform-express": "^10.0.0",
+    "@nestjs/typeorm": "^10.0.2",
+    "bcrypt": "^5.1.1",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.14.1",
+    "passport": "^0.7.0",
+    "passport-jwt": "^4.0.1",)";
+
+    std::string dependencias_db;
+    if (motor_db == "postgres") {
+        dependencias_db = R"(
+    "pg": "^8.7.3",)";
+    }
+    else if (motor_db == "mysql") {
+        dependencias_db = R"(
+    "mysql2": "^3.6.5",)";
+    }
+    else if (motor_db == "mssql" || motor_db == "sqlserver") {
+        dependencias_db = R"(
+    "mssql": "^10.0.1",)";
+    }
+    else if (motor_db == "sqlite") {
+        dependencias_db = R"(
+    "sqlite3": "^5.1.6",)";
+    }
+
+    std::string dependencias_resto = R"(
+    "reflect-metadata": "^0.1.13",
+    "rxjs": "^7.8.1",
+    "typeorm": "^0.3.17"
+  },
+  "devDependencies": {
+    "@nestjs/cli": "^10.0.0",
+    "@types/express": "^4.17.17",
+    "@types/node": "^20.3.1",
+    "@types/bcrypt": "^5.0.2",
+    "@types/passport-jwt": "^4.0.1",
+    "source-map-support": "^0.5.21",
+    "ts-loader": "^9.4.3",
+    "ts-node": "^10.9.1",
+    "tsconfig-paths": "^4.2.0",
+    "typescript": "^5.1.3"
+  }
+})";
+
+    std::string contenido_completo = dependencias_base + dependencias_db + dependencias_resto;
+    escribirArchivo(dir_salida + "/package.json", contenido_completo);
+}
+
+void GeneradorCodigo::generarArchivosBase(const json& datos_modulos, const std::string& motor_db) {
     std::cout << "Generando archivos base del proyecto..." << std::endl;
     std::string contenido_main_ts = R"(import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
@@ -72,7 +143,7 @@ bootstrap();
     "noFallthroughCasesInSwitch": false
   }
 })";
-    escribirArchivo(dir_salida + "/package.json", renderizarPlantilla("PackageJson.tpl", {}));
+    generarPackageJson(motor_db);
     escribirArchivo(dir_salida + "/src/main.ts", contenido_main_ts);
     escribirArchivo(dir_salida + "/src/database/typeorm.config.ts", renderizarPlantilla("TypeOrmConfig.tpl", {}));
     escribirArchivo(dir_salida + "/src/app.module.ts", renderizarPlantilla("AppModule.tpl", datos_modulos));
@@ -199,7 +270,7 @@ void GeneradorCodigo::generarProyectoCompleto(const std::vector<Tabla>& tablas, 
     else {
         std::cout << "ADVERTENCIA: No se generara autenticacion - no hay tabla de usuario valida" << std::endl;
     }
-    generarArchivosBase(datos_modulos);
+    generarArchivosBase(datos_modulos, motor_db);
     if (ptr_tabla_usuario) {
         generarModuloAutenticacion(*ptr_tabla_usuario);
     }
@@ -211,7 +282,7 @@ void GeneradorCodigo::generarProyectoCompleto(const std::vector<Tabla>& tablas, 
 
 void GeneradorCodigo::generarArchivoEnv(const std::string& motor_db, const std::string& host, const std::string& puerto, const std::string& usuario, const std::string& contrasena, const std::string& base_datos, const std::string& jwt_secret) {
     std::cout << "Generando archivo .env con configuraciones de base de datos..." << std::endl;
-    std::string tipo_db = (motor_db == "postgres") ? "postgres" : (motor_db == "mysql") ? "mysql" : (motor_db == "sqlserver") ? "mssql" : (motor_db == "sqlite") ? "sqlite" : "postgres";
+    std::string tipo_db = (motor_db == "postgres") ? "postgres" : (motor_db == "mysql") ? "mysql" : (motor_db == "sqlserver" || motor_db == "mssql") ? "mssql" : (motor_db == "sqlite") ? "sqlite" : "postgres";
     std::string contenido_env = "# Configuracion de Base de Datos\n";
     contenido_env += "DB_TYPE=" + tipo_db + "\n";
     contenido_env += "DB_HOST=" + host + "\n";

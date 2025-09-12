@@ -1,4 +1,5 @@
 #include "GestorCifrado.hpp"
+#include "GestorAuditoria.hpp"
 #include <openssl/evp.h>
 #include <openssl/aes.h>
 #include <openssl/rand.h>
@@ -217,12 +218,23 @@ void GestorCifrado::cifrarTablasDeAuditoria() {
         tablas_auditoria.end()
     );
 
+    if (tablas_auditoria.empty()) {
+        std::cout << "No se encontraron tablas de auditoria para cifrar." << std::endl;
+        return;
+    }
+
     if (gestor_db->getMotor() == GestorAuditoria::MotorDB::SQLServer) {
         prepararCifradoSQLServer();
     }
 
     for (const auto& tabla : tablas_auditoria) {
         try {
+            std::cout << "Procesando tabla " << tabla << "..." << std::endl;
+
+            if (gestor_db->getMotor() == GestorAuditoria::MotorDB::MySQL) {
+                eliminarIndicesMySQL(tabla);
+            }
+
             auto resultado_columnas = gestor_db->ejecutarConsultaConResultado("SELECT * FROM " + tabla + " LIMIT 1");
             std::map<std::string, std::string> mapa_columnas;
 
@@ -247,29 +259,68 @@ void GestorCifrado::cifrarTablasDeAuditoria() {
             if (mapa_columnas.empty()) continue;
 
             auto datos_actuales = gestor_db->ejecutarConsultaConResultado("SELECT * FROM " + tabla);
-            if (datos_actuales.filas.empty()) continue;
+            if (datos_actuales.filas.empty()) {
+                std::cout << "Tabla " << tabla << " sin datos, renombrando columnas..." << std::endl;
+                for (const auto& par : mapa_columnas) {
+                    std::string rename_sql;
+                    switch (gestor_db->getMotor()) {
+                    case GestorAuditoria::MotorDB::PostgreSQL:
+                        rename_sql = "ALTER TABLE public.\"" + tabla + "\" RENAME COLUMN \"" + par.first + "\" TO \"" + par.second + "\"";
+                        break;
+                    case GestorAuditoria::MotorDB::MySQL:
+                        rename_sql = "ALTER TABLE `" + tabla + "` RENAME COLUMN `" + par.first + "` TO `" + par.second + "`";
+                        break;
+                    case GestorAuditoria::MotorDB::SQLServer:
+                        rename_sql = "EXEC sp_rename '" + tabla + "." + par.first + "', '" + par.second + "', 'COLUMN'";
+                        break;
+                    default: continue;
+                    }
+                    gestor_db->ejecutarComando(rename_sql);
+                }
+                continue;
+            }
 
-            const std::string pk_col_name = datos_actuales.columnas.front();
-            int pk_col_idx = 0;
-
+            if (gestor_db->getMotor() == GestorAuditoria::MotorDB::MySQL) {
+                gestor_db->ejecutarComando("CREATE TEMPORARY TABLE temp_" + tabla + " AS SELECT * FROM " + tabla);
+                gestor_db->ejecutarComando("TRUNCATE TABLE " + tabla);
+            }
 
             for (const auto& fila : datos_actuales.filas) {
-                std::string update_sql = "UPDATE `" + tabla + "` SET ";
-                std::string where_clause = " WHERE `" + pk_col_name + "` = '" + fila[pk_col_idx] + "'";
+                std::ostringstream insert_sql;
+                std::ostringstream values_sql;
+                insert_sql << "INSERT INTO " << tabla << " (";
+                values_sql << ") VALUES (";
+
                 bool first = true;
                 for (size_t i = 0; i < datos_actuales.columnas.size(); ++i) {
-                    const auto& col_name = datos_actuales.columnas[i];
-                    if (i == pk_col_idx) continue;
+                    if (!first) {
+                        insert_sql << ", ";
+                        values_sql << ", ";
+                    }
 
-                    if (!first) update_sql += ", ";
+                    std::string col_name_quoted;
+                    switch (gestor_db->getMotor()) {
+                    case GestorAuditoria::MotorDB::PostgreSQL:
+                        col_name_quoted = "\"" + datos_actuales.columnas[i] + "\"";
+                        break;
+                    case GestorAuditoria::MotorDB::MySQL:
+                        col_name_quoted = "`" + datos_actuales.columnas[i] + "`";
+                        break;
+                    case GestorAuditoria::MotorDB::SQLServer:
+                        col_name_quoted = "[" + datos_actuales.columnas[i] + "]";
+                        break;
+                    default:
+                        col_name_quoted = datos_actuales.columnas[i];
+                    }
+
+                    insert_sql << col_name_quoted;
                     std::string valor_cifrado = cifrarValor(fila[i]);
                     boost::replace_all(valor_cifrado, "'", "''");
-                    update_sql += "`" + col_name + "` = '" + valor_cifrado + "'";
+                    values_sql << "'" << valor_cifrado << "'";
                     first = false;
                 }
-                if (!first) {
-                    gestor_db->ejecutarComando(update_sql + where_clause);
-                }
+
+                gestor_db->ejecutarComando(insert_sql.str() + values_sql.str());
             }
 
             for (const auto& par : mapa_columnas) {
@@ -288,11 +339,36 @@ void GestorCifrado::cifrarTablasDeAuditoria() {
                 }
                 gestor_db->ejecutarComando(rename_sql);
             }
-            actualizarTriggersParaCifrado(tabla, mapa_columnas);
+
+            std::string nombre_tabla_original = tabla;
+            boost::replace_first(nombre_tabla_original, "aud_", "");
+            boost::replace_first(nombre_tabla_original, "Aud", "");
+            actualizarTriggersParaCifrado(nombre_tabla_original, mapa_columnas);
+
+            std::cout << "Tabla " << tabla << " cifrada exitosamente." << std::endl;
         }
         catch (const std::exception& e) {
             std::cerr << "Error procesando tabla " << tabla << ": " << e.what() << std::endl;
         }
+    }
+}
+
+void GestorCifrado::eliminarIndicesMySQL(const std::string& tabla) {
+    try {
+        auto resultado = gestor_db->ejecutarConsultaConResultado(
+            "SELECT DISTINCT INDEX_NAME FROM INFORMATION_SCHEMA.STATISTICS "
+            "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '" + tabla + "' "
+            "AND INDEX_NAME != 'PRIMARY'"
+        );
+
+        for (const auto& fila : resultado.filas) {
+            if (!fila.empty()) {
+                gestor_db->ejecutarComando("DROP INDEX `" + fila[0] + "` ON `" + tabla + "`");
+            }
+        }
+    }
+    catch (const std::exception& e) {
+        std::cerr << "Advertencia al eliminar indices: " << e.what() << std::endl;
     }
 }
 
@@ -323,7 +399,6 @@ void GestorCifrado::prepararCifradoSQLServer() {
         gestor_db->ejecutarComando("CREATE MASTER KEY ENCRYPTION BY PASSWORD = 'DevPasswordComplexEnough#123!'");
     }
     catch (const std::exception& e) {
-        // La clave maestra ya existe, ignorar el error
     }
 
     std::string preparacion_sql =
@@ -341,15 +416,10 @@ void GestorCifrado::prepararCifradoSQLServer() {
     gestor_db->ejecutarComando(preparacion_sql);
 }
 
-void GestorCifrado::actualizarTriggersParaCifrado(const std::string& nombre_tabla_auditoria, const std::map<std::string, std::string>& mapa_columnas) {
-    std::string nombre_tabla_original = nombre_tabla_auditoria;
-    boost::replace_first(nombre_tabla_original, "aud_", "");
-    boost::replace_first(nombre_tabla_original, "Aud", "");
-
-
+void GestorCifrado::actualizarTriggersParaCifrado(const std::string& nombre_tabla_original, const std::map<std::string, std::string>& mapa_columnas) {
     nlohmann::json datos;
     datos["tabla"] = nombre_tabla_original;
-    datos["tabla_auditoria"] = nombre_tabla_auditoria;
+    datos["tabla_auditoria"] = "aud_" + nombre_tabla_original;
     datos["clave_hex"] = clave_hex;
 
     std::ostringstream columnas_cifradas_lista, valores_insert_new, valores_update_old, valores_delete_old;

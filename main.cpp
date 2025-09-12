@@ -2,7 +2,6 @@
 #include <boost/program_options.hpp>
 #include <boost/algorithm/string.hpp>
 #include "Utils.hpp"
-#include "GestorExportacion.hpp"
 
 namespace po = boost::program_options;
 
@@ -87,12 +86,12 @@ int main(int argc, char* argv[]) {
         desc.add_options()
             ("help,h", "Muestra esta ayuda")
             ("accion", po::value<std::string>()->required(),
-                "Accion a realizar: scaffolding, auditoria, encriptado, exportar, sql")
+                "Accion a realizar: scaffolding, auditoria, encriptado, sql")
             ("motor", po::value<std::string>()->default_value("postgres"),
                 "Motor de base de datos: postgres, mysql, sqlserver, sqlite")
             ("host", po::value<std::string>()->default_value("localhost"),
                 "Host del servidor de base de datos")
-            ("port", po::value<std::string>()->default_value("5432"),
+            ("port", po::value<std::string>(),
                 "Puerto del servidor")
             ("user", po::value<std::string>()->default_value("postgres"),
                 "Usuario de la base de datos")
@@ -113,9 +112,7 @@ int main(int argc, char* argv[]) {
             ("jwt-secret", po::value<std::string>(),
                 "Secreto JWT para autenticacion")
             ("driver", po::value<std::string>(),
-                "Driver ODBC especifico (para SQL Server)")
-            ("export-file", po::value<std::string>(),
-                "Archivo de salida para exportacion");
+                "Driver ODBC especifico (para SQL Server)");
 
         po::positional_options_description pos;
         pos.add("accion", 1);
@@ -133,7 +130,7 @@ int main(int argc, char* argv[]) {
         std::string accion = boost::to_lower_copy(vm["accion"].as<std::string>());
 
         if (accion != "scaffolding" && accion != "auditoria" &&
-            accion != "encriptado" && accion != "exportar" && accion != "sql") {
+            accion != "encriptado" && accion != "sql") {
             throw std::runtime_error("Accion no valida: " + accion);
         }
 
@@ -157,21 +154,6 @@ int main(int argc, char* argv[]) {
         else if (accion == "sql") {
             std::cout << "Ejecutando consulta SQL..." << std::endl;
             manejarConsultaSql(vm, motor, info_conexion);
-        }
-        else if (accion == "exportar") {
-            std::cout << "Iniciando exportacion de base de datos..." << std::endl;
-            std::string archivo_salida = vm.count("export-file") ?
-                vm["export-file"].as<std::string>() :
-                vm["dbname"].as<std::string>() + "_backup.sql";
-
-            GestorExportacion exportador(motor,
-                vm["dbname"].as<std::string>(),
-                vm["user"].as<std::string>(),
-                vm["password"].as<std::string>(),
-                vm["host"].as<std::string>(),
-                vm["port"].as<std::string>());
-
-            exportador.exportarRespaldo(archivo_salida);
         }
 
         std::cout << "\nProceso completado exitosamente." << std::endl;
